@@ -1,0 +1,8 @@
+BEGIN_PROLOG
+
+GammaCatcher: {
+ module_type : "GammaCatcher"  
+ RawDigitProducer : "wcNoiseFilter"   
+}
+
+END_PROLOG
