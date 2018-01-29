@@ -110,6 +110,8 @@ void GammaCatcher::produce(art::Event & e)
     auto channelvitals = getBaselineRMS(rawdigit.ADCs());
     _base = channelvitals.first;
     _rms  = channelvitals.second;
+    
+    _chan_tree->Fill();
 
     if (rawdigit.Channel() == 5000)
       std::cout << "DAVIDC REACHED CHANNEL 5000! DAVIDC" << std::endl;
