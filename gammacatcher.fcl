@@ -3,8 +3,10 @@ BEGIN_PROLOG
 GammaCatcher: {
  module_type : "GammaCatcher"  
  RawDigitProducer : "wcNoiseFilter"   
- NSigma           : 10.0
+ NSigma           : 5.0
  MinTickWidth     : 3
+ CellSize         : 2.0
+ ClusterRadius    : 0.5
 }
 
 END_PROLOG

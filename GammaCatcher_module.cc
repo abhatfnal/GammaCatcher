@@ -87,6 +87,12 @@ private:
   double fNSigma;
   // minimum number of ticks above threshold to have a hit
   int fMinTickWidth;
+  // clustering radius and cell size 
+  // [radius is going to be the physically important quantity
+  // cell-size is only for algorithm implementation]
+  // cell-size should be ~x2 of the radius
+  double fCellSize;
+  double fClusterRadius;
   
   /**
      Make clusters
@@ -114,6 +120,8 @@ GammaCatcher::GammaCatcher(fhicl::ParameterSet const & p)
   fRawDigitProducer = p.get<std::string>("RawDigitProducer");
   fNSigma           = p.get<double>     ("NSigma");
   fMinTickWidth     = p.get<int>        ("MinTickWidth");
+  fCellSize         = p.get<double>     ("CellSize");
+  fClusterRadius    = p.get<double>     ("ClusterRadius");
 
 }
 
@@ -210,6 +218,8 @@ void GammaCatcher::beginJob()
 
   _ProximityClusterer = new gammacatcher::ProximityClusterer();
   _ProximityClusterer->initialize();
+  _ProximityClusterer->setRadius(fClusterRadius);
+  _ProximityClusterer->setCellSize(fCellSize);
   
 }
 
