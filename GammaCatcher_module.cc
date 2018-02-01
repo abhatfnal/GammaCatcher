@@ -17,6 +17,8 @@
 #include "canvas/Utilities/InputTag.h"
 #include "fhiclcpp/ParameterSet.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
+#include "larcore/Geometry/Geometry.h"
+#include "larcore/Geometry/GeometryCore.h"
 
 // Services
 #include "art/Framework/Services/Optional/TFileService.h"
@@ -30,6 +32,9 @@
 
 // ROOT
 #include <TTree.h>
+
+// Algorithms
+#include "Algorithms/HitFinding.h"
 
 class GammaCatcher;
 
@@ -53,11 +58,6 @@ public:
   void beginJob() override;
   void endJob() override;
 
-  /**
-  Calculate baseline and RMS for a waveform's ADCs
-  */
-  std::pair<float,float> getBaselineRMS(const std::vector<short>& wf);
-
   // TTree where to store variables
   TTree* _chan_tree;
   int    _chan;
@@ -65,10 +65,17 @@ public:
   float  _rms;
   int    _run, _sub, _evt;
 
+  // HitFinding class
+  gammacatcher::HitFinding* _HitFinding;
+
 private:
 
   // Declare member data here.
   std::string fRawDigitProducer;
+  // NSigma for hit threshold on RMS noise
+  double fNSigma;
+  // minimum number of ticks above threshold to have a hit
+  int fMinTickWidth;
 
 };
 
@@ -82,6 +89,8 @@ GammaCatcher::GammaCatcher(fhicl::ParameterSet const & p)
   
   // grab from fhicl file:
   fRawDigitProducer = p.get<std::string>("RawDigitProducer");
+  fNSigma           = p.get<double>     ("NSigma");
+  fMinTickWidth     = p.get<int>        ("MinTickWidth");
 
 }
 
@@ -91,6 +100,10 @@ void GammaCatcher::produce(art::Event & e)
   _evt  = e.event();
   _sub  = e.subRun();
   _run  = e.run();
+
+  // geometry service
+  art::ServiceHandle<geo::Geometry> geo;
+  //geo::GeometryCore const* geom = lar::providerFrom<geo::Geometry>();
 
   // produce Hit objects
   std::unique_ptr< std::vector<recob::Hit> > Hit_v(new std::vector<recob::Hit>);
@@ -105,50 +118,35 @@ void GammaCatcher::produce(art::Event & e)
     _chan = rawdigit.Channel();
 
     // collection-plane only
-    if (_chan < 4800) continue;
+    if (geo->View(_chan) != geo::kW) continue;
     
-    auto channelvitals = getBaselineRMS(rawdigit.ADCs());
+    auto channelvitals = _HitFinding->getBaselineRMS(rawdigit.ADCs());
     _base = channelvitals.first;
     _rms  = channelvitals.second;
     
+    // get hits from channel
+    auto hits = _HitFinding->getHits(rawdigit.ADCs(),_base,_rms);
+
+    // loop through hits and create larsoft hits
+    for (auto const& hit : hits) {
+      recob::Hit arthit(_chan, (int)hit.tstart, (int)hit.tend, hit.time,
+			0., _rms, hit.ampl, 0., hit.area, hit.area,
+			0., 0., 0., 0., 0., 
+			geo->View(_chan), geo->SignalType(_chan), geo->ChannelToWire(_chan)[0] );
+
+      Hit_v->emplace_back(arthit);
+    }// for all hits created
+    
     _chan_tree->Fill();
 
-    if (rawdigit.Channel() == 5000)
-      std::cout << "DAVIDC REACHED CHANNEL 5000! DAVIDC" << std::endl;
-
   }// for all RawDigit objects
+
+  std::cout << "DAVIDC created " << Hit_v->size() << " hits in event" << std::endl;
   
   e.put(std::move(Hit_v));
 
 }
 
-std::pair<float,float> GammaCatcher::getBaselineRMS(const std::vector<short>& wf) {
-
-  // to do:
-  // scan only portion of waveform
-  // define acceptable noise level
-  // if noise below -> return RMS and baseline
-  // otherwise move to next segment in waveform.
-
-  auto adc_v = wf;
-  std::sort(adc_v.begin(), adc_v.end());
-
-  // truncate top 10% of values [to remove real pulses]
-  std::vector<short> truncated_adc(adc_v.begin(), adc_v.end() - adc_v.size()/10);
-
-  float base  = 0.;
-  float rms   = 0.;
-
-  for (auto const& adc : truncated_adc)
-    base += adc;
-  base = base / truncated_adc.size();
-  for (auto const& adc : truncated_adc)
-    rms += (adc-base)*(adc-base);
-  rms = sqrt( rms / ( truncated_adc.size() - 1) );
-
-  return std::make_pair(base,rms);
-
-}
 
 void GammaCatcher::beginJob()
 {
@@ -163,7 +161,9 @@ void GammaCatcher::beginJob()
   _chan_tree->Branch("_sub" ,&_sub ,"sub/I");
   _chan_tree->Branch("_run" ,&_run ,"run/I");
   
-
+  _HitFinding = new gammacatcher::HitFinding();
+  _HitFinding->setNSigma(fNSigma);
+  _HitFinding->setMinTickWidth(fMinTickWidth);
   
 }
 

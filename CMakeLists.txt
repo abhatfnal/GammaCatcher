@@ -10,6 +10,7 @@ art_make(
                         ${Boost_SYSTEM_LIBRARY}
 			${ROOT_BASIC_LIB_LIST}
           MODULE_LIBRARIES 
+			uboone_GammaCatcher_Algorithms
 			larcore_Geometry
 			larcore_Geometry_Geometry_service
 			larsim_Simulation nutools_ParticleNavigation lardataobj_Simulation
@@ -42,7 +43,10 @@ art_make(
 			${ROOT_BASIC_LIB_LIST}
         )
 
+add_subdirectory(Algorithms)
+
 install_headers()
 install_fhicl()
 install_source()
+
 
