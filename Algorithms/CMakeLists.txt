@@ -3,6 +3,7 @@ art_make(
 			larcore_Geometry	
 		   	uboone_Geometry		
 			larcore_Geometry_Geometry_service	
+			canvas_Utilities
                         ${MF_MESSAGELOGGER}
                         ${MF_UTILITIES}
                         ${CETLIB}
@@ -11,13 +12,6 @@ art_make(
 		   	${ART_FRAMEWORK_SERVICES_REGISTRY}
 		   	${ART_FRAMEWORK_SERVICES_OPTIONAL}
 
-	 MODULE_LIBRARIES
-			larcore_Geometry
-		   	uboone_Geometry
-		   	larcore_Geometry_Geometry_service
-                        ${ROOT_GEOM}
-		   	${ART_FRAMEWORK_SERVICES_REGISTRY}
-		   	${ART_FRAMEWORK_SERVICES_OPTIONAL}
         )
 
 

@@ -24,6 +24,7 @@
 #include "art/Framework/Services/Optional/TFileService.h"
 
 // Data Products
+#include "lardataobj/RecoBase/Cluster.h"
 #include "lardataobj/RecoBase/Hit.h"
 #include "lardataobj/RawData/RawDigit.h"
 
@@ -35,6 +36,7 @@
 
 // Algorithms
 #include "Algorithms/HitFinding.h"
+#include "Algorithms/ProximityClusterer.h"
 
 class GammaCatcher;
 
@@ -67,6 +69,8 @@ public:
 
   // HitFinding class
   gammacatcher::HitFinding* _HitFinding;
+  // Proximity clusterer class
+  gammacatcher::ProximityClusterer* _ProximityClusterer;
 
 private:
 
@@ -76,6 +80,13 @@ private:
   double fNSigma;
   // minimum number of ticks above threshold to have a hit
   int fMinTickWidth;
+  
+  /**
+     Make clusters
+   */
+  void MakeClusters(const std::unique_ptr< std::vector<recob::Hit> >& hits,
+		    const std::vector<std::vector<unsigned int> >& cluster_idx_v,
+		    const std::unique_ptr< std::vector<recob::Cluster> >& clusters);
 
 };
 
@@ -86,6 +97,7 @@ GammaCatcher::GammaCatcher(fhicl::ParameterSet const & p)
 {
 
   produces< std::vector< recob::Hit > >();
+  produces< std::vector< recob::Cluster > >();
   
   // grab from fhicl file:
   fRawDigitProducer = p.get<std::string>("RawDigitProducer");
@@ -107,6 +119,9 @@ void GammaCatcher::produce(art::Event & e)
 
   // produce Hit objects
   std::unique_ptr< std::vector<recob::Hit> > Hit_v(new std::vector<recob::Hit>);
+  // produce Cluster objects
+  std::unique_ptr< std::vector<recob::Cluster> > Cluster_v(new std::vector<recob::Cluster>);
+
 
   // load RawDigits
   art::Handle<std::vector<raw::RawDigit> > rawdigit_h;
@@ -136,14 +151,26 @@ void GammaCatcher::produce(art::Event & e)
 
       Hit_v->emplace_back(arthit);
     }// for all hits created
-    
+
     _chan_tree->Fill();
 
   }// for all RawDigit objects
 
+  // cluster index vectors will be stored here
+  std::vector<std::vector<unsigned int> > cluster_v;
+  // cluster hits together
+  _ProximityClusterer->cluster(Hit_v,cluster_v);
+
+  // go through indices and make clusters
+  MakeClusters(Hit_v, cluster_v, Cluster_v);
+	       
+
   std::cout << "DAVIDC created " << Hit_v->size() << " hits in event" << std::endl;
+  std::cout << "DAVIDC created " << cluster_v.size() << " clusters in event" << std::endl;
+  std::cout << "DAVIDC created " << Cluster_v->size() << " clusters in event" << std::endl;
   
   e.put(std::move(Hit_v));
+  e.put(std::move(Cluster_v));
 
 }
 
@@ -164,12 +191,55 @@ void GammaCatcher::beginJob()
   _HitFinding = new gammacatcher::HitFinding();
   _HitFinding->setNSigma(fNSigma);
   _HitFinding->setMinTickWidth(fMinTickWidth);
+
+  _ProximityClusterer = new gammacatcher::ProximityClusterer();
+  _ProximityClusterer->initialize();
   
 }
 
 void GammaCatcher::endJob()
 {
   // Implementation of optional member function here.
+}
+
+
+void GammaCatcher::MakeClusters(const std::unique_ptr< std::vector<recob::Hit> >& hits,
+				const std::vector<std::vector<unsigned int> >& cluster_v,
+				const std::unique_ptr< std::vector<recob::Cluster> >& clusters)
+{
+
+  clusters->clear();
+
+  for (size_t n=0; n < cluster_v.size(); n++) {
+    auto const& clus_idx_v = cluster_v.at(n);
+    if (clus_idx_v.size() == 0) continue;
+    float w_min = 9999;
+    float t_min = 9999;
+    float w_max = -1;
+    float t_max = -1;
+    float integral = 0;
+    for (auto const& hit_idx : clus_idx_v) {
+      auto const& hit = hits->at(hit_idx);
+      float t = hit.PeakTime();
+      float w = hit.WireID().Wire;
+      if (t > t_max) t_max = t;
+      if (t < t_min) t_min = t;
+      if (w > w_max) w_max = w;
+      if (w < w_min) w_min = w;
+      integral += hit.Integral();
+    }// for all hits
+    recob::Cluster clus(w_min, 0., t_min, 0., 0., 0., 0., 
+			w_max, 0., w_max, 0., 0., 0., 0., 
+			integral, 0., integral, 0., 
+			clus_idx_v.size(), 0., 0., n,
+			hits->at(clus_idx_v[0]).View(),
+			geo::PlaneID());
+
+    clusters->emplace_back(clus);
+    
+  }// for all clusters
+
+  return;
 }
 
 DEFINE_ART_MODULE(GammaCatcher)
