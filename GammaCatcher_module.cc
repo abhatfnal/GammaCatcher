@@ -15,6 +15,7 @@
 #include "art/Framework/Principal/Run.h"
 #include "art/Framework/Principal/SubRun.h"
 #include "canvas/Utilities/InputTag.h"
+#include "canvas/Persistency/Common/Assns.h"
 #include "fhiclcpp/ParameterSet.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 #include "larcore/Geometry/Geometry.h"
@@ -27,6 +28,12 @@
 #include "lardataobj/RecoBase/Cluster.h"
 #include "lardataobj/RecoBase/Hit.h"
 #include "lardataobj/RawData/RawDigit.h"
+#include "lardata/Utilities/AssociationUtil.h"
+
+// this line good for "new" larsoft:
+// #include "art/Persistency/Common/PtrMaker.h"
+// for outdated versions (i.e MCC8) use this line:
+#include "lardata/Utilities/PtrMaker.h"
 
 // C++
 #include <memory>
@@ -86,7 +93,10 @@ private:
    */
   void MakeClusters(const std::unique_ptr< std::vector<recob::Hit> >& hits,
 		    const std::vector<std::vector<unsigned int> >& cluster_idx_v,
-		    const std::unique_ptr< std::vector<recob::Cluster> >& clusters);
+		    std::unique_ptr< std::vector<recob::Cluster> >& clusters,
+		    std::unique_ptr<art::Assns<recob::Cluster, recob::Hit> >& assns,
+		    lar::PtrMaker<recob::Hit> HitPtrMaker,
+		    lar::PtrMaker<recob::Cluster> ClusPtrMaker);
 
 };
 
@@ -98,6 +108,7 @@ GammaCatcher::GammaCatcher(fhicl::ParameterSet const & p)
 
   produces< std::vector< recob::Hit > >();
   produces< std::vector< recob::Cluster > >();
+  produces< art::Assns<  recob::Cluster, recob::Hit> >();
   
   // grab from fhicl file:
   fRawDigitProducer = p.get<std::string>("RawDigitProducer");
@@ -121,8 +132,13 @@ void GammaCatcher::produce(art::Event & e)
   std::unique_ptr< std::vector<recob::Hit> > Hit_v(new std::vector<recob::Hit>);
   // produce Cluster objects
   std::unique_ptr< std::vector<recob::Cluster> > Cluster_v(new std::vector<recob::Cluster>);
+  // produce associations
+  auto Cluster_Hit_Assn_v = std::make_unique< art::Assns<recob::Cluster, recob::Hit> >();
 
-
+  // Art Pointer maker
+  lar::PtrMaker<recob::Hit>     makeHitPtr (e, *this);
+  lar::PtrMaker<recob::Cluster> makeClusPtr(e, *this);
+  
   // load RawDigits
   art::Handle<std::vector<raw::RawDigit> > rawdigit_h;
   e.getByLabel(fRawDigitProducer,rawdigit_h);
@@ -162,15 +178,15 @@ void GammaCatcher::produce(art::Event & e)
   _ProximityClusterer->cluster(Hit_v,cluster_v);
 
   // go through indices and make clusters
-  MakeClusters(Hit_v, cluster_v, Cluster_v);
-	       
+  MakeClusters(Hit_v, cluster_v, Cluster_v, Cluster_Hit_Assn_v, makeHitPtr, makeClusPtr);
 
-  std::cout << "DAVIDC created " << Hit_v->size() << " hits in event" << std::endl;
-  std::cout << "DAVIDC created " << cluster_v.size() << " clusters in event" << std::endl;
-  std::cout << "DAVIDC created " << Cluster_v->size() << " clusters in event" << std::endl;
+  std::cout << "DAVIDC created " << Hit_v->size()              << " hits in event"         << std::endl;
+  std::cout << "DAVIDC created " << Cluster_v->size()          << " clusters in event"     << std::endl;
+  std::cout << "DAVIDC created " << Cluster_Hit_Assn_v->size() << " associations in event" << std::endl;
   
   e.put(std::move(Hit_v));
   e.put(std::move(Cluster_v));
+  e.put(std::move(Cluster_Hit_Assn_v));
 
 }
 
@@ -205,7 +221,10 @@ void GammaCatcher::endJob()
 
 void GammaCatcher::MakeClusters(const std::unique_ptr< std::vector<recob::Hit> >& hits,
 				const std::vector<std::vector<unsigned int> >& cluster_v,
-				const std::unique_ptr< std::vector<recob::Cluster> >& clusters)
+				std::unique_ptr< std::vector<recob::Cluster> >& clusters,
+				std::unique_ptr< art::Assns<recob::Cluster, recob::Hit> >& assns,
+				lar::PtrMaker<recob::Hit> HitPtrMaker,
+				lar::PtrMaker<recob::Cluster> ClusPtrMaker)
 {
 
   clusters->clear();
@@ -233,9 +252,16 @@ void GammaCatcher::MakeClusters(const std::unique_ptr< std::vector<recob::Hit> >
 			integral, 0., integral, 0., 
 			clus_idx_v.size(), 0., 0., n,
 			hits->at(clus_idx_v[0]).View(),
-			geo::PlaneID());
+			geo::PlaneID(0,0,hits->at(clus_idx_v[0]).WireID().Plane));
 
     clusters->emplace_back(clus);
+
+    // fill associations
+    art::Ptr<recob::Cluster> const ClusPtr = ClusPtrMaker(clusters->size()-1);
+    for (auto const& hit_idx : clus_idx_v) {
+      art::Ptr<recob::Hit> const HitPtr = HitPtrMaker(hit_idx);
+      assns->addSingle(ClusPtr,HitPtr);
+    }// for all hits
     
   }// for all clusters
 
