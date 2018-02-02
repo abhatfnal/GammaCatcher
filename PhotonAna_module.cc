@@ -30,6 +30,8 @@
 
 #include "lardataobj/RecoBase/Cluster.h"
 #include "lardataobj/RecoBase/Hit.h"
+#include "lardataobj/RecoBase/Vertex.h"
+#include "lardataobj/RecoBase/Track.h"
 #include "lardata/Utilities/AssociationUtil.h"
 
 // ROOT
@@ -66,7 +68,7 @@ private:
   // cluster size [cm2]
   double fClusAreaMax;
   // producers
-  std::string fClusterProducer, fHitProducer;
+  std::string fClusterProducer, fHitProducer, fVertexProducer, fAssnProducer;
   // debug mode
   bool fDebug;
 

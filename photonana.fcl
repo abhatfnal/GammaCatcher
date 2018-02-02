@@ -4,9 +4,11 @@ PhotonAna: {
  module_type : "PhotonAna"  
  HitProducer : "gammacatcher"   
  ClusterProducer : "gammacatcher"
+ VertexProducer : "pandoraNu"
+ AssnProducer : "NuMuCCSelectionII"
  Buffer : 20
  ClusAreaMax : 30
- Debug : true
+ Debug : false
 }
 
 END_PROLOG
