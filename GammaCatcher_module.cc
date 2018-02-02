@@ -67,12 +67,16 @@ public:
   void beginJob() override;
   void endJob() override;
 
-  // TTree where to store variables
+  // TTree where to store noise-ralted variables
   TTree* _chan_tree;
   int    _chan;
   float  _base;
   float  _rms;
   int    _run, _sub, _evt;
+
+  // TTree where to store cluster-related variables
+  TTree* _clus_tree;
+  float  _charge;
 
   // HitFinding class
   gammacatcher::HitFinding* _HitFinding;
@@ -211,6 +215,9 @@ void GammaCatcher::beginJob()
   _chan_tree->Branch("_evt" ,&_evt ,"evt/I");
   _chan_tree->Branch("_sub" ,&_sub ,"sub/I");
   _chan_tree->Branch("_run" ,&_run ,"run/I");
+
+  _clus_tree = tfs->make<TTree>("_clus_tree","Cluster Info TTree");
+  _clus_tree->Branch("_charge",&_charge,"charge/F");
   
   _HitFinding = new gammacatcher::HitFinding();
   _HitFinding->setNSigma(fNSigma);
@@ -263,6 +270,9 @@ void GammaCatcher::MakeClusters(const std::unique_ptr< std::vector<recob::Hit> >
 			clus_idx_v.size(), 0., 0., n,
 			hits->at(clus_idx_v[0]).View(),
 			geo::PlaneID(0,0,hits->at(clus_idx_v[0]).WireID().Plane));
+    
+    _charge = integral;
+    _clus_tree->Fill();
 
     clusters->emplace_back(clus);
 

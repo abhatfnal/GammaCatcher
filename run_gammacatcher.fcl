@@ -1,6 +1,7 @@
 #include "services_microboone.fcl"
 #include "triggeralgo_service.fcl"
 #include "gammacatcher.fcl"
+#include "photonana.fcl"
 
 process_name: GammaCatcher
 
@@ -48,11 +49,13 @@ physics:
   gammacatcher : @local::GammaCatcher
  }
  analyzers:
- { }
+ { 
+  photonana : @local::PhotonAna
+}
 
  #reco: [ rns, ophit, opflash, simpleFlash, opflashfilter ]
  reco: [ rns, gammacatcher ]
- ana: [ ]
+ ana: [ photonana ]
 
  #define the output stream, there could be more than one if using filters 
  stream1:  [ out1 ]
@@ -63,7 +66,8 @@ physics:
 
  #end_paths is a keyword and contains the paths that do not modify the art::Event, 
  #ie analyzers and output streams.  these all run simultaneously
- end_paths:     [stream1]
+ #end_paths:     [stream1,ana]
+ end_paths:     [ana]
 }
 
 #block to define where the output goes.  if you defined a filter in the physics
