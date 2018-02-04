@@ -49,14 +49,14 @@ namespace gammacatcher {
     // are we in an active hit?                                                                                                      
     bool active = false;
 
-    // loop through waveform                                                                                                         
-    for (size_t i=0; i < wf.size(); i++){
+    // loop through waveform 
+    // skip first ~50 ticks to make sure we don't get out of range issues
+    for (size_t i=50; i < wf.size()-50; i++){
 
       double h = wf[i]-baseline;
-
-      // is it above the cut we want to apply?                                                                                       
+      // is it above the cut we want to apply?
       if (h > rms*_nsigma){
-        // if not active start the hit                                                                                               
+        // if not active start the hit
 	if (!active){
           amp = h;
           area = h;
@@ -64,7 +64,7 @@ namespace gammacatcher {
           peak = i;
           active = true;
         }
-        // if already in an active region keep adding to the hit                                                                     
+        // if already in an active region keep adding to the hit
         else{
           area += h;
           if (h > amp){
@@ -73,13 +73,18 @@ namespace gammacatcher {
           }
         }
       }
-      // else -> we are not in an active region                                                                                      
+      // else -> we are not in an active region
       else{
-        // if we were in an active region we have reached the end of a hit                                                           
+        // if we were in an active region we have reached the end of a hit
         if (active){
           end = i;
-          // now make hit                                                                                                            
-          // if passes minimum hit width condition                                                                                   
+	  // add to hit area ADCs from nearby ticks which are below threshold
+	  for (int j=0; j < _hittickbuffer; j++) {
+	    area += wf[start-j-1]-baseline;
+	    area += wf[end+j]-baseline;
+	  }
+          // now make hit                                             
+          // if passes minimum hit width condition                     
           if ( (end-start) >= _mintickwidth){
 	    gammacatcher::RawHit hit;
 	    hit.ampl   = amp;
@@ -90,16 +95,15 @@ namespace gammacatcher {
             hits.push_back(hit);
           }
           active = false;
-          // clear hit attributes                                                                                                    
+          // clear hit attributes
           peak = 0;
           area = 0;
           end = 0;
           start = 0;
           amp = 0;
         }
-      }// if not in an active region                                                                                                 
-    }// looping over waveform                                                                                                        
-
+      }// if not in an active region        
+    }// looping over waveform                
     return hits;
   }
 

@@ -99,6 +99,8 @@ private:
   double fNSigma;
   // minimum number of ticks above threshold to have a hit
   int fMinTickWidth;
+  // tick buffer to integrate ADCs below hit threshold
+  int fHitTickBuffer;
   // clustering radius and cell size 
   // [radius is going to be the physically important quantity
   // cell-size is only for algorithm implementation]
@@ -130,10 +132,11 @@ GammaCatcher::GammaCatcher(fhicl::ParameterSet const & p)
   
   // grab from fhicl file:
   fRawDigitProducer = p.get<std::string>("RawDigitProducer");
-  fNSigma           = p.get<double>     ("NSigma");
-  fMinTickWidth     = p.get<int>        ("MinTickWidth");
-  fCellSize         = p.get<double>     ("CellSize");
-  fClusterRadius    = p.get<double>     ("ClusterRadius");
+  fNSigma           = p.get<double>     ("NSigma"          );
+  fMinTickWidth     = p.get<int>        ("MinTickWidth"    );
+  fHitTickBuffer    = p.get<int>        ("HitTickBuffer"   );
+  fCellSize         = p.get<double>     ("CellSize"        );
+  fClusterRadius    = p.get<double>     ("ClusterRadius"   );
 
 }
 
@@ -205,10 +208,6 @@ void GammaCatcher::produce(art::Event & e)
   // go through indices and make clusters
   MakeClusters(Hit_v, cluster_v, Cluster_v, Cluster_Hit_Assn_v, makeHitPtr, makeClusPtr);
 
-  std::cout << "DAVIDC created " << Hit_v->size()              << " hits in event"         << std::endl;
-  std::cout << "DAVIDC created " << Cluster_v->size()          << " clusters in event"     << std::endl;
-  std::cout << "DAVIDC created " << Cluster_Hit_Assn_v->size() << " associations in event" << std::endl;
-  
   e.put(std::move(Hit_v));
   e.put(std::move(Cluster_v));
   e.put(std::move(Cluster_Hit_Assn_v));
@@ -241,6 +240,7 @@ void GammaCatcher::beginJob()
   _HitFinding = new gammacatcher::HitFinding();
   _HitFinding->setNSigma(fNSigma);
   _HitFinding->setMinTickWidth(fMinTickWidth);
+  _HitFinding->setHitTickBuffer(fHitTickBuffer);
 
   _ProximityClusterer = new gammacatcher::ProximityClusterer();
   _ProximityClusterer->initialize();

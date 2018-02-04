@@ -58,11 +58,17 @@ namespace gammacatcher{
        set minimum hit width in ticks
      */
     void setMinTickWidth(const int& nticks) { _mintickwidth = nticks; }
+    
+    /**
+       set tick buffer to integrate ADCs in region surrounding ADCs above threshold
+     */
+    void setHitTickBuffer(const int& buff) { _hittickbuffer = buff; }
 
   private:
     
     double _nsigma; // threshold on sigma RMS for being in active hit region.
     int    _mintickwidth; // minimum tick number above threshold for a hit
+    int    _hittickbuffer; // TDCs to integrate around ADCs above threshold
 
   };
   

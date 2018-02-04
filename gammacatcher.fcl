@@ -5,6 +5,7 @@ GammaCatcher: {
  RawDigitProducer : "wcNoiseFilter"   
  NSigma           : 4.0
  MinTickWidth     : 5
+ HitTickBuffer    : 5
  CellSize         : 2.0
  ClusterRadius    : 0.5
 }
