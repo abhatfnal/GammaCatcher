@@ -74,9 +74,17 @@ public:
   float  _rms;
   int    _run, _sub, _evt;
 
+  // TTree where to store hit info
+  TTree* _hit_tree;
+  float  _ampl;
+  float  _area;
+  int    _nticks;
+  
+
   // TTree where to store cluster-related variables
   TTree* _clus_tree;
   float  _charge;
+  int    _nhits;
 
   // HitFinding class
   gammacatcher::HitFinding* _HitFinding;
@@ -177,6 +185,11 @@ void GammaCatcher::produce(art::Event & e)
 			0., 0., 0., 0., 0., 
 			geo->View(_chan), geo->SignalType(_chan), geo->ChannelToWire(_chan)[0] );
 
+      _ampl   = hit.ampl;
+      _area   = hit.area;
+      _nticks = (int)hit.tend - (int)hit.tstart;
+      _hit_tree->Fill();
+
       Hit_v->emplace_back(arthit);
     }// for all hits created
 
@@ -216,8 +229,14 @@ void GammaCatcher::beginJob()
   _chan_tree->Branch("_sub" ,&_sub ,"sub/I");
   _chan_tree->Branch("_run" ,&_run ,"run/I");
 
+  _hit_tree = tfs->make<TTree>("_hit_tree","Hit Info TTree");
+  _hit_tree->Branch("_ampl"  ,&_ampl  ,"ampl/F"  );
+  _hit_tree->Branch("_area"  ,&_area  ,"area/F"  );
+  _hit_tree->Branch("_nticks",&_nticks,"nticks/I");
+  
   _clus_tree = tfs->make<TTree>("_clus_tree","Cluster Info TTree");
   _clus_tree->Branch("_charge",&_charge,"charge/F");
+  _clus_tree->Branch("_nhits" ,&_nhits ,"nhits/I" );
   
   _HitFinding = new gammacatcher::HitFinding();
   _HitFinding->setNSigma(fNSigma);
@@ -265,13 +284,14 @@ void GammaCatcher::MakeClusters(const std::unique_ptr< std::vector<recob::Hit> >
       integral += hit.Integral();
     }// for all hits
     recob::Cluster clus(w_min, 0., t_min, 0., 0., 0., 0., 
-			w_max, 0., w_max, 0., 0., 0., 0., 
+			w_max, 0., t_max, 0., 0., 0., 0., 
 			integral, 0., integral, 0., 
 			clus_idx_v.size(), 0., 0., n,
 			hits->at(clus_idx_v[0]).View(),
 			geo::PlaneID(0,0,hits->at(clus_idx_v[0]).WireID().Plane));
     
     _charge = integral;
+    _nhits  = clus_idx_v.size();
     _clus_tree->Fill();
 
     clusters->emplace_back(clus);
