@@ -1,16 +1,13 @@
 ////////////////////////////////////////////////////////////////////////
-// Class:       PhotonAna
-// Plugin Type: analyzer (art v2_05_01)
-// File:        PhotonAna_module.cc
+// Class:       NeutrinoGammas
+// Plugin Type: producer (art v2_05_01)
+// File:        NeutrinoGammas_module.cc
 //
-// Generated at Thu Feb  1 21:04:28 2018 by David Caratelli using cetskelgen
-// contact : David Caratelli [davidc@fnal.gov]
+// Generated at Mon Feb  5 22:53:51 2018 by David Caratelli using cetskelgen
 // from cetlib version v1_21_00.
-// The goal of this module is to take identified isolated clusters
-// measure their spatial isolation and study their energy spectra
 ////////////////////////////////////////////////////////////////////////
 
-#include "art/Framework/Core/EDAnalyzer.h"
+#include "art/Framework/Core/EDProducer.h"
 #include "art/Framework/Core/ModuleMacros.h"
 #include "art/Framework/Principal/Event.h"
 #include "art/Framework/Principal/Handle.h"
@@ -20,14 +17,18 @@
 #include "fhiclcpp/ParameterSet.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 
+#include <memory>
+
 // Services
 #include "art/Framework/Services/Optional/TFileService.h"
 
 #include "larcore/Geometry/Geometry.h"
 #include "larcore/Geometry/GeometryCore.h"
+// #include "larcorealg/GeoAlgo/GeoAlgo.h" CANNOT USE, CANNOT FIND IN DEPENDENCIES FOR MCC8...
 #include "lardata/Utilities/GeometryUtilities.h"
 #include "lardata/DetectorInfoServices/DetectorPropertiesService.h"
 
+#include "lardataobj/RecoBase/Track.h"
 #include "lardataobj/RecoBase/Cluster.h"
 #include "lardataobj/RecoBase/Hit.h"
 #include "lardata/Utilities/AssociationUtil.h"
@@ -36,29 +37,31 @@
 #include <TFile.h>
 #include <TTree.h>
 
-class PhotonAna;
+class NeutrinoGammas;
 
 
-class PhotonAna : public art::EDAnalyzer {
+class NeutrinoGammas : public art::EDProducer {
 public:
-  explicit PhotonAna(fhicl::ParameterSet const & p);
+  explicit NeutrinoGammas(fhicl::ParameterSet const & p);
   // The compiler-generated destructor is fine for non-base
   // classes without bare pointers or other resource use.
 
   // Plugins should not be copied or assigned.
-  PhotonAna(PhotonAna const &) = delete;
-  PhotonAna(PhotonAna &&) = delete;
-  PhotonAna & operator = (PhotonAna const &) = delete;
-  PhotonAna & operator = (PhotonAna &&) = delete;
+  NeutrinoGammas(NeutrinoGammas const &) = delete;
+  NeutrinoGammas(NeutrinoGammas &&) = delete;
+  NeutrinoGammas & operator = (NeutrinoGammas const &) = delete;
+  NeutrinoGammas & operator = (NeutrinoGammas &&) = delete;
 
   // Required functions.
-  void analyze(art::Event const & e) override;
+  void produce(art::Event & e) override;
 
   // Selected optional functions.
   void beginJob() override;
   void endJob() override;
 
 private:
+
+  // Declare member data here.
 
   double _wire2cm, _time2cm;
 
@@ -67,11 +70,15 @@ private:
   // cluster size [cm2]
   double fClusAreaMax;
   // producers
-  std::string fClusterProducer, fHitProducer, fVertexProducer, fAssnProducer;
+  std::string fClusterProducer, fHitProducer, fVertexProducer, fAssnProducer, fTrackProducer;
   // debug mode
   bool fDebug;
-  // use vertex?
-  bool fUseVertex;
+  // veto radius -> surrounds nu vtx and is used to identify crossing cosmic-rays
+  double fVetoRadius;
+  // square of radius for faster computation
+  double fVetoRadiusSq;
+  // minimum impact paramter for track to be considered cosmic
+  double fIPmin;
 
   // TTree variables
   TTree *_clus_tree;
@@ -118,112 +125,86 @@ private:
   /**
      Load vertex from TTree input information, if this is available
    */
-  void LoadVertex(const int& run, const int& event);
+  bool LoadVertex(const int& run, const int& event);
+
+  /**
+     Calculate number of tracks intersecting veto radius surrounding
+     the neutrino interaction
+   */
+  int CosmicVeto(const  art::Handle<std::vector<recob::Track> >& tracks);
+
+  /**
+     Return number of track - sphere intersection points and 
+     minimum distance of track-points to sphere
+   */
+  std::pair<int,float> SphereIntersection(const recob::Track& trk);
+
+  /**
+     Square distance between point and reco'd vertex.
+   */
+  double SqDist(const TVector3& pt);
 
 };
 
 
-PhotonAna::PhotonAna(fhicl::ParameterSet const & p)
-  : EDAnalyzer(p)
+NeutrinoGammas::NeutrinoGammas(fhicl::ParameterSet const & p)
+// :
+// Initialize member data here.
 {
+
+  produces< std::vector< recob::Cluster > >();
+
   fBuff            = p.get<double>("Buffer"              );
   fClusAreaMax     = p.get<double>("ClusAreaMax"         );
   fClusterProducer = p.get<std::string>("ClusterProducer");
   fHitProducer     = p.get<std::string>("HitProducer"    );
+  fTrackProducer   = p.get<std::string>("TrackProducer"  );
   fDebug           = p.get<bool>("Debug"                 );
-  fUseVertex       = p.get<bool>("UseVertex"             );
   fTTreeName       = p.get<std::string>("TTreeName"      );
   fTFileName       = p.get<std::string>("TFileName"      );
   fDirName         = p.get<std::string>("DirName"        );
+  fVetoRadius      = p.get<double     >("VetoRadius"     );
+  fIPmin           = p.get<double     >("IPmin"          );
+  fVetoRadiusSq    = fVetoRadius * fVetoRadius;
 
 }
 
-void PhotonAna::analyze(art::Event const & e)
+void NeutrinoGammas::produce(art::Event & e)
 {
 
+  // load clusters and hits already reconstructed by previous step
   art::Handle<std::vector<recob::Cluster> > cluster_h;
   e.getByLabel(fClusterProducer,cluster_h);
-
   art::FindMany<recob::Hit> clus_hit_assn_v(cluster_h, e, fHitProducer);
 
+  // load tracks to do cosmic-removal
+  art::Handle<std::vector<recob::Track> > track_h;
+  e.getByLabel(fTrackProducer,track_h);
+
+  // produce clusters
+  std::unique_ptr< std::vector<recob::Cluster> > Cluster_v(new std::vector<recob::Cluster>);
+    
   // if using vertex the vertex will be loaded by the below function:
-  LoadVertex(e.run(),e.event());
+  auto foundvtx = LoadVertex(e.run(),e.event());
+  if (foundvtx == true) {
 
-  // COM variables
-  double COMw, COMt;
+    if (fDebug) { std::cout << std::endl << "VERTEX @ " << _xpos << ", " << _ypos << ", " << _zpos << std::endl << std::endl; }
 
-  // double loop through clusters
-  for (size_t n1=0; n1 < cluster_h->size(); n1++) {
-
-    auto const& c1 = cluster_h->at(n1);
-
-    if (fDebug)
-      std::cout << "Cluster  w/ bounds [ "
-		<< c1.StartTick() << " , " << c1.StartWire()
-		<< " ] -> [ "
-		<< c1.EndTick() << " , " << c1.EndWire() << " ]"
-		<< std::endl;
-	
-
-    _charge = c1.Integral();
-
-    // if cluster is small enough
-    if (ClusterArea(c1) > fClusAreaMax)
-      continue;
-
-    ClusterCOM(clus_hit_assn_v.at(n1),COMw,COMt);
-
-    if (fDebug)
-      std::cout << " w/ area " << ClusterArea(c1) 
-		<< " & COM : [" << COMt << " , " << COMw << " ]"
-		<< std::endl;
-
-    // sum of charge in buffer region associated
-    // to nearby clusters
-    _qbuffer = 0.;
-
-    int Noverlap = 0;
-    int Nbuffer  = 0;
+    // Identify how many tracks enter vertex buffer veto region
+    auto const& ncosmics = CosmicVeto(track_h);
     
-    for (size_t n2=0; n2 < cluster_h->size(); n2++) {
+    std::cout << "Number of cosmics intersecting vertex veto : " << ncosmics << std::endl;
+  }
+  else
+    std::cout << "No VERTEX FOUND!" << std::endl;
 
-      if (n1 == n2) continue;
-
-      auto const& c2 = cluster_h->at(n2);
-
-      // do the clusters overlap? 
-      if (ClusterBoxOverlap(c1,c2) == false)
-	continue;
-
-      Noverlap += 1;
-      
-      double d = ClusterDistance(COMw,COMt, clus_hit_assn_v.at(n2));
-      
-      if (d < fBuff){
-	Nbuffer += 1;
-	_qbuffer += c2.Integral();
-      }
-
-    }// 2nd cluster loop
-
-    // vertex distance, if using vertex
-    if (fUseVertex)
-      _vtxdist = sqrt( (_wirepos - COMw) * (_wirepos - COMw) + (_tickpos - COMt) * (_tickpos - COMt) );
-    
-    if (fDebug)
-      std::cout << "Noverlap : " << Noverlap 
-		<< "\t Nbuffer : " << Nbuffer
-		<< "\t QBuffer : " << _qbuffer
-		<< std::endl << std::endl;
-
-    _clus_tree->Fill();
-      
-  }// 1st cluster loop
+  e.put(std::move(Cluster_v));
 
 }
 
-void PhotonAna::beginJob()
+void NeutrinoGammas::beginJob()
 {
+
   // get detector specific properties
   auto const* geom = ::lar::providerFrom<geo::Geometry>();
   auto const* detp = lar::providerFrom<detinfo::DetectorPropertiesService>();
@@ -249,12 +230,12 @@ void PhotonAna::beginJob()
 
 }
 
-void PhotonAna::endJob()
+void NeutrinoGammas::endJob()
 {
   // Implementation of optional member function here.
 }
 
-bool PhotonAna::ClusterBoxOverlap(const recob::Cluster& c1,
+bool NeutrinoGammas::ClusterBoxOverlap(const recob::Cluster& c1,
 				  const recob::Cluster& c2)
 {
 
@@ -299,7 +280,7 @@ bool PhotonAna::ClusterBoxOverlap(const recob::Cluster& c1,
   return false;
 }
 
-void PhotonAna::ClusterCOM(const std::vector<const recob::Hit*>& hit_v,
+void NeutrinoGammas::ClusterCOM(const std::vector<const recob::Hit*>& hit_v,
 			   double& COMw, double& COMt) 
 {
 
@@ -319,7 +300,7 @@ void PhotonAna::ClusterCOM(const std::vector<const recob::Hit*>& hit_v,
   return;
 }
 
-double PhotonAna::ClusterArea(const recob::Cluster& c) 
+double NeutrinoGammas::ClusterArea(const recob::Cluster& c) 
 {
 
   double dw = (c.EndWire()-c.StartWire());
@@ -327,7 +308,7 @@ double PhotonAna::ClusterArea(const recob::Cluster& c)
   return fabs(dw * dt * _wire2cm * _time2cm);
 }
 
-double PhotonAna::ClusterDistance(const double& CMw,
+double NeutrinoGammas::ClusterDistance(const double& CMw,
 				  const double& CMt,
 				  const std::vector<const recob::Hit*>& hit_v) 
 {
@@ -346,34 +327,106 @@ double PhotonAna::ClusterDistance(const double& CMw,
   return sqrt(dminSq);
 }
 
-void PhotonAna::LoadVertex(const int& run, const int& evt)
+bool NeutrinoGammas::LoadVertex(const int& run, const int& evt)
 {
-  
-  // if we are using a vertex, find the position in this event:
-  if (fUseVertex) {
-    
-    for (int n=0; n < _evt_tree->GetEntries(); n++) {
-      _evt_tree->GetEntry(n);
-      if ( (_run == run) && (_evt == evt) )
-	break; // exit loop with correct xyz pos information for this event
-    }// for all TTree entries
-    // calculate wire-tick position of vertex
-    // get 3D point to 2D:
-    _wirepos = _zpos;
-    _tickpos = _xpos;
-    /*
-    auto const* geoM = ::lar::providerFrom<geo::Geometry>();
-    Double_t origin[3] = {};
-    geoM->PlaneOriginVtx(2,origin);
-    Double_t xyz[3] = {_xpos,_ypos,_zpos};
-    auto const* geoH = ::lar::providerFrom<util::GeometryUtilities>();
-    auto vtx2D = _geoH->Get2DPointProjection(xyz,2);
-    _wirepos = vtx2D.w / _wire2cm;
-    _tickpos = vtx2D.t + 800 * _time2cm - origin[0]; 
-    */
-  }// if using a vertex
 
-  return;
+  bool found = false;
+  
+  for (int n=0; n < _evt_tree->GetEntries(); n++) {
+    _evt_tree->GetEntry(n);
+    if ( (_run == run) && (_evt == evt) ) {
+      found = true;
+      break; // exit loop with correct xyz pos information for this event
+    }
+  }// for all TTree entries
+  // calculate wire-tick position of vertex
+  // get 3D point to 2D:
+
+  if (found == false) 
+    return false;
+
+  _wirepos = _zpos;
+  _tickpos = _xpos;
+  
+  return true;
 }
 
-DEFINE_ART_MODULE(PhotonAna)
+int NeutrinoGammas::CosmicVeto(const  art::Handle<std::vector<recob::Track> >& tracks) {
+
+  int ntracks = 0;
+  
+  if (fDebug) 
+    std::cout << "looping trhough " << tracks->size() << " cosmic tracks" << std::endl;
+
+  // for each track in the event, determine if it intersects the veto region
+  for (size_t t=0; t < tracks->size(); t++) {
+    auto const& trk = tracks->at(t);
+    auto SEdist = (trk.Vertex()-trk.End()).Mag(); // linear separation between vertex and end-point
+    // measure if the track linear -> helps determine if really a cosmic muon or some nearby garbage
+    if ( (trk.Length() > 50.) && (SEdist > 50) && (trk.Length() < 2* SEdist) ) {
+      auto const& intersection = SphereIntersection(trk);
+      if (fDebug) { std::cout << "track " << t << " has " << intersection.first 
+			      << " intersections w/ Vertex Veto" << std::endl; }
+      // if more then one intersection point -> cosmic track
+      if (intersection.first > 1) {
+	if (fDebug) { std::cout << "\t 2+ intersections -> cosmic!" << std::endl; }
+	ntracks += 1;
+      }
+      else if ( (intersection.second > fIPmin) && (intersection.first == 1) ) {
+	if (fDebug) { std::cout << "\t IP : " << intersection.second << " -> cosmic! " << std::endl; }
+	ntracks += 1;
+      }
+    }// if track is straight and long
+  }// for all tracks in the event
+  
+  return ntracks;
+}
+
+std::pair<int,float> NeutrinoGammas::SphereIntersection(const recob::Track& trk) {
+  
+  // loop through all points along the track
+  // and calculate how many times the sphere radius is crossed
+  // as well as the minimum distance to the vertex
+
+  int ncross   = 0; // number of times the track crosses the bounding radius
+  float dvtxSq = 1e6; // min distance of any point to the sphere [squared for computation]
+
+  // are we inside or outside of the sphere? helps keep track
+  // of whether we have stepped in/out
+  bool insphere = false;
+  // step sampled
+  size_t nstep = 0;
+
+  size_t ptn = 0; // loop trhough track points
+  while (ptn < trk.NumberTrajectoryPoints()) {
+    //auto const& vp = trk.NextValidPoint(validpoint);
+    if (trk.HasValidPoint(ptn) == false) { ptn += 1; continue; }
+    auto const& pt = trk.LocationAtPoint( ptn );
+    ptn += 1;
+    auto dSq = SqDist(pt);
+    if (dSq < dvtxSq) { dvtxSq = dSq; }
+    if (dSq < fVetoRadiusSq) {
+      if (insphere == false) {
+	insphere = true;
+	if (nstep != 0) { ncross += 1; }
+      }// if we just crossed in the sphere!
+    }// if in the sphere
+    else { // if we are outside of the sphere
+      if (insphere == true) {
+	ncross += 1;
+	insphere = false;
+      }// if we were inside the sphere and just crossed out
+    }// if outside of the sphere
+    nstep += 1;
+  }// while looping through track points
+  
+  return std::make_pair(ncross,sqrt(dvtxSq));
+}
+
+// distance between point and vertex
+double NeutrinoGammas::SqDist(const TVector3& pt) {
+
+  return (_xpos - pt[0]) * (_xpos - pt[0]) + (_ypos - pt[1]) * (_ypos - pt[1]) + (_zpos - pt[2]) * (_zpos - pt[2]);
+}
+
+DEFINE_ART_MODULE(NeutrinoGammas)

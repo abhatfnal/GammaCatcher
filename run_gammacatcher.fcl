@@ -2,6 +2,7 @@
 #include "triggeralgo_service.fcl"
 #include "gammacatcher.fcl"
 #include "photonana.fcl"
+#include "neutrinogammas.fcl"
 
 process_name: GammaCatcher
 
@@ -47,6 +48,7 @@ physics:
 
   ### gamma catcher
   gammacatcher : @local::GammaCatcher
+  neutrinogammas : @local::NeutrinoGammas
  }
  analyzers:
  { 
@@ -54,7 +56,7 @@ physics:
 }
 
  #reco: [ rns, ophit, opflash, simpleFlash, opflashfilter ]
- reco: [ rns, gammacatcher ]
+ reco: [ rns, gammacatcher, neutrinogammas ]
  ana: [ photonana ]
 
  #define the output stream, there could be more than one if using filters 
