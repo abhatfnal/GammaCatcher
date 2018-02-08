@@ -1,4 +1,4 @@
-////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////
 // Class:       NeutrinoGammas
 // Plugin Type: producer (art v2_05_01)
 // File:        NeutrinoGammas_module.cc
@@ -33,6 +33,11 @@
 #include "lardataobj/RecoBase/Hit.h"
 #include "lardata/Utilities/AssociationUtil.h"
 
+// this line good for "new" larsoft:
+// #include "art/Persistency/Common/PtrMaker.h"
+// for outdated versions (i.e MCC8) use this line:
+#include "lardata/Utilities/PtrMaker.h"
+
 // ROOT
 #include <TFile.h>
 #include <TTree.h>
@@ -65,14 +70,18 @@ private:
 
   double _wire2cm, _time2cm;
 
-  // buffer size
-  double fBuff;
   // cluster size [cm2]
   double fClusAreaMax;
   // producers
-  std::string fClusterProducer, fHitProducer, fVertexProducer, fAssnProducer, fTrackProducer;
+  std::string fClusterProducer, fHitProducer, fVertexProducer, fTrackProducer;
+  // producer for cluster -> hit association, necessary to grab hit indices in cluster -> hit ass
+  //std::string fAssnProducer;
   // debug mode
   bool fDebug;
+  // gamma radius: 2D radius within which to reconstruct de-excitation gammas from neutrino interaction
+  double fGammaRadius;
+  // suqare of radius for faster computation
+  double fGammaRadiusSq;
   // veto radius -> surrounds nu vtx and is used to identify crossing cosmic-rays
   double fVetoRadius;
   // square of radius for faster computation
@@ -93,6 +102,13 @@ private:
   Float_t _xpos, _ypos, _zpos; // xyz of vertex
   float _wirepos, _tickpos; // wire-tick coordinates of reco'd vertex on Y plane
   std::string fTTreeName, fTFileName, fDirName;
+  
+  // TTree where to store output variables
+  TTree *_gamma_tree;
+  float _qgamma, _wgamma, _tgamma;
+
+  TTree *_nu_tree;
+  float _qtot;
 
   /**
      Do cluster boxes overlap?
@@ -154,17 +170,23 @@ NeutrinoGammas::NeutrinoGammas(fhicl::ParameterSet const & p)
 
   produces< std::vector< recob::Cluster > >();
 
-  fBuff            = p.get<double>("Buffer"              );
-  fClusAreaMax     = p.get<double>("ClusAreaMax"         );
+  // producers
   fClusterProducer = p.get<std::string>("ClusterProducer");
   fHitProducer     = p.get<std::string>("HitProducer"    );
+  //fAssnProducer    = p.get<std::string>("AssnProducer"   );
   fTrackProducer   = p.get<std::string>("TrackProducer"  );
-  fDebug           = p.get<bool>("Debug"                 );
+  // how to access TTree with vertices
   fTTreeName       = p.get<std::string>("TTreeName"      );
   fTFileName       = p.get<std::string>("TFileName"      );
   fDirName         = p.get<std::string>("DirName"        );
-  fVetoRadius      = p.get<double     >("VetoRadius"     );
-  fIPmin           = p.get<double     >("IPmin"          );
+  // debug flag
+  fDebug           = p.get<bool>       ("Debug"          );
+  // algo parameters
+  fClusAreaMax     = p.get<double>     ("ClusAreaMax"    );
+  fGammaRadius     = p.get<double>     ("GammaRadius"    );
+  fVetoRadius      = p.get<double>     ("VetoRadius"     );
+  fIPmin           = p.get<double>     ("IPmin"          );
+  fGammaRadiusSq   = fGammaRadius * fGammaRadius;
   fVetoRadiusSq    = fVetoRadius * fVetoRadius;
 
 }
@@ -176,6 +198,9 @@ void NeutrinoGammas::produce(art::Event & e)
   art::Handle<std::vector<recob::Cluster> > cluster_h;
   e.getByLabel(fClusterProducer,cluster_h);
   art::FindMany<recob::Hit> clus_hit_assn_v(cluster_h, e, fHitProducer);
+  // additionally load cluster -> hit association directly to access hit indices
+  //art::Handle< art::Assns<recob::Cluster,recob::Hit,void> > assn_h;
+  //e.getByLabel(fAssnProducer,assn_h);
 
   // load tracks to do cosmic-removal
   art::Handle<std::vector<recob::Track> > track_h;
@@ -183,23 +208,77 @@ void NeutrinoGammas::produce(art::Event & e)
 
   // produce clusters
   std::unique_ptr< std::vector<recob::Cluster> > Cluster_v(new std::vector<recob::Cluster>);
+  // and associations
+  //auto Cluster_Hit_Assn_v = std::make_unique< art::Assns<recob::Cluster, recob::Hit> >();
+
+  // Art Pointer maker
+  //lar::PtrMaker<recob::Hit>     makeHitPtr (e, *this);
+  //lar::PtrMaker<recob::Cluster> makeClusPtr(e, *this);
     
   // if using vertex the vertex will be loaded by the below function:
   auto foundvtx = LoadVertex(e.run(),e.event());
-  if (foundvtx == true) {
-
-    if (fDebug) { std::cout << std::endl << "VERTEX @ " << _xpos << ", " << _ypos << ", " << _zpos << std::endl << std::endl; }
-
-    // Identify how many tracks enter vertex buffer veto region
-    auto const& ncosmics = CosmicVeto(track_h);
-    
-    std::cout << "Number of cosmics intersecting vertex veto : " << ncosmics << std::endl;
+  if (foundvtx == false) {
+    e.put(std::move(Cluster_v));
+    std::cout << "NO VERTEX FOUND -> ERROR!" << std::endl;
+    return;
   }
-  else
-    std::cout << "No VERTEX FOUND!" << std::endl;
+  
+  if (fDebug) { 
+    std::cout << std::endl << "VERTEX @ " << _xpos << ", " << _ypos << ", " << _zpos << std::endl 
+	      << " corresponding to (wire,tick) -> " << _wirepos << ", " << _tickpos << std::endl
+	      << std::endl; 
+  }
+  
+  // Identify how many tracks enter vertex buffer veto region
+  auto const& ncosmics = CosmicVeto(track_h);
+  
+  if (fDebug) { std::cout << "Number of cosmics intersecting vertex veto : " << ncosmics << std::endl; }
 
+  // cluster COM info
+  double COMw, COMt;
+
+  // reset total charge for this neutrino interaction
+  _qtot = 0;
+
+  // loop through reconstructed clusters
+  for (size_t c=0; c < cluster_h->size(); c++) {
+
+    ClusterCOM(clus_hit_assn_v.at(c),COMw,COMt);
+
+    // if COM is outside of GammaRadius sphere surrounding vertex -> not interested
+    double dvtxSq = ( (COMw - _wirepos) * (COMw - _wirepos) + (COMt - _tickpos) * (COMt - _tickpos) );
+    if (dvtxSq > fGammaRadiusSq) continue;
+
+    auto const& clus = cluster_h->at(c);
+    //check that clusters have a small area
+    if (ClusterArea(clus) > fClusAreaMax)
+      continue;
+    
+    Cluster_v->emplace_back(clus);
+
+    _wgamma = COMw;
+    _tgamma = COMt;
+    _qgamma = clus.Integral();
+
+    _gamma_tree->Fill();
+
+    _qtot += _qgamma;
+
+    /*
+    art::Ptr<recob::Cluster> const clusPtr = makeClusPtr(Cluster_v->size()-1);
+    // add associations to hits as well
+    auto const& associated_hits = clus_hit_assn_v.at(c);
+    std::cout << "Associated hits : " << associated_hits << std::endl;
+    */
+
+  }// for all clusters
+
+  _nu_tree->Fill();
+  
+  
   e.put(std::move(Cluster_v));
 
+  return;
 }
 
 void NeutrinoGammas::beginJob()
@@ -228,56 +307,29 @@ void NeutrinoGammas::beginJob()
   _evt_tree->SetBranchAddress("_ypos",&_ypos);
   _evt_tree->SetBranchAddress("_zpos",&_zpos);
 
+  // output ttree for gamma-by-gamma info
+  _gamma_tree = tfs->make<TTree>("_gamma_tree","Neutrino Gamma TTree");
+  _gamma_tree->Branch("_run",&_run,"run/I");
+  _gamma_tree->Branch("_evt",&_evt,"evt/I");
+  _gamma_tree->Branch("_xpos",&_xpos,"zpos/F");
+  _gamma_tree->Branch("_ypos",&_ypos,"ypos/F");
+  _gamma_tree->Branch("_zpos",&_zpos,"zpos/F");
+  _gamma_tree->Branch("_wirepos",&_wirepos,"wirepos/F");
+  _gamma_tree->Branch("_tickpos",&_tickpos,"tickpos/F");
+  _gamma_tree->Branch("_qgamma",&_qgamma,"qgamma/F");
+  _gamma_tree->Branch("_wgamma",&_wgamma,"wgamma/F");
+  _gamma_tree->Branch("_tgamma",&_tgamma,"tgamma/F");
+
+  _nu_tree = tfs->make<TTree>("_nu_tree","Neutrino InteractionTTree");
+  _nu_tree->Branch("_run",&_run,"run/I");
+  _nu_tree->Branch("_evt",&_evt,"evt/I");
+  _nu_tree->Branch("_qtot",&_qtot,"qtot/F");
+
 }
 
 void NeutrinoGammas::endJob()
 {
   // Implementation of optional member function here.
-}
-
-bool NeutrinoGammas::ClusterBoxOverlap(const recob::Cluster& c1,
-				  const recob::Cluster& c2)
-{
-
-  // assumption
-  // end wire/tick always larger than start wire/tick
-
-  // if not on the same plane -> no overlap!
-  if (c1.Plane() != c2.Plane())
-    return false;
-
-  auto sw1 = c1.StartWire() * _wire2cm;
-  auto ew1 = c1.EndWire() * _wire2cm;
-  auto st1 = c1.StartTick() * _time2cm;
-  auto et1 = c1.EndTick() * _time2cm;
-
-  auto sw2 = c2.StartWire() * _wire2cm;
-  auto ew2 = c2.EndWire() * _wire2cm;
-  auto st2 = c2.StartTick() * _time2cm;
-  auto et2 = c2.EndTick() * _time2cm;
-
-  // if at least one point of one rectangle in the other
-  // -> overlap
-  if ( (sw1 > (sw2-fBuff)) && (sw1 < (ew2+fBuff)) && (st1 > (st2-fBuff)) && (st1 < (et2+fBuff)) )
-    return true;
-  if ( (sw1 > (sw2-fBuff)) && (sw1 < (ew2+fBuff)) && (et1 > (st2-fBuff)) && (et1 < (et2+fBuff)) )
-    return true;
-  if ( (ew1 > (sw2-fBuff)) && (ew1 < (ew2+fBuff)) && (st1 > (st2-fBuff)) && (st1 < (et2+fBuff)) )
-    return true;
-  if ( (ew1 > (sw2-fBuff)) && (ew1 < (ew2+fBuff)) && (et1 > (st2-fBuff)) && (et1 < (et2+fBuff)) )
-    return true;
-
-  if ( (sw2 > (sw1-fBuff)) && (sw2 < (ew1+fBuff)) && (st2 > (st1-fBuff)) && (st2 < (et1+fBuff)) )
-    return true;
-  if ( (sw2 > (sw1-fBuff)) && (sw2 < (ew1+fBuff)) && (et2 > (st1-fBuff)) && (et2 < (et1+fBuff)) )
-    return true;
-  if ( (ew2 > (sw1-fBuff)) && (ew2 < (ew1+fBuff)) && (st2 > (st1-fBuff)) && (st2 < (et1+fBuff)) )
-    return true;
-  if ( (ew2 > (sw1-fBuff)) && (ew2 < (ew1+fBuff)) && (et2 > (st1-fBuff)) && (et2 < (et1+fBuff)) )
-    return true;
-
-  // else -> no overlap
-  return false;
 }
 
 void NeutrinoGammas::ClusterCOM(const std::vector<const recob::Hit*>& hit_v,
@@ -290,7 +342,7 @@ void NeutrinoGammas::ClusterCOM(const std::vector<const recob::Hit*>& hit_v,
 
   for (auto const& hit : hit_v){
     COMw += hit->WireID().Wire * _wire2cm * hit->Integral();
-    COMt += hit->PeakTime()    * _time2cm * hit->Integral();
+    COMt += (hit->PeakTime() - 800)   * _time2cm * hit->Integral();
     qtot += hit->Integral();
   }
   
@@ -309,8 +361,8 @@ double NeutrinoGammas::ClusterArea(const recob::Cluster& c)
 }
 
 double NeutrinoGammas::ClusterDistance(const double& CMw,
-				  const double& CMt,
-				  const std::vector<const recob::Hit*>& hit_v) 
+				       const double& CMt,
+				       const std::vector<const recob::Hit*>& hit_v) 
 {
 
   double dminSq = 99999.;
@@ -344,9 +396,9 @@ bool NeutrinoGammas::LoadVertex(const int& run, const int& evt)
 
   if (found == false) 
     return false;
-
+  
   _wirepos = _zpos;
-  _tickpos = _xpos;
+  _tickpos = _xpos;// - (800 * _time2cm);
   
   return true;
 }

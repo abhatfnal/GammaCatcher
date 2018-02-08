@@ -1,19 +1,20 @@
 BEGIN_PROLOG
 
 NeutrinoGammas: {
- module_type : "NeutrinoGammas"  
- HitProducer : "gammacatcher"   
+ module_type     : "NeutrinoGammas"  
+ HitProducer     : "gammacatcher"   
  ClusterProducer : "gammacatcher"
  TrackProducer   : "pandoraCosmic"
- Buffer : 20
- ClusAreaMax : 30
- Debug : true
- UseVertex : true
- TTreeName : "_tree"
- DirName :   "skimneutrinos"
- TFileName : "skimneutrinos_ana.root"
- VetoRadius : 50
- IPmin : 10
+ Buffer          : 20
+ ClusAreaMax     : 30
+ Debug           : true
+ UseVertex       : true
+ TTreeName       : "_tree"
+ DirName         : "skimneutrinos"
+ TFileName       : "skimneutrinos_ana.root"
+ VetoRadius      : 50
+ GammaRadius     : 40
+ IPmin           : 10
 }
 
 END_PROLOG
