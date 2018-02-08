@@ -5,10 +5,8 @@ NeutrinoGammas: {
  HitProducer     : "gammacatcher"   
  ClusterProducer : "gammacatcher"
  TrackProducer   : "pandoraCosmic"
- Buffer          : 20
- ClusAreaMax     : 30
+ ClusAreaMax     : 20
  Debug           : true
- UseVertex       : true
  TTreeName       : "_tree"
  DirName         : "skimneutrinos"
  TFileName       : "skimneutrinos_ana.root"

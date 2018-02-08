@@ -121,7 +121,7 @@ private:
   /**
      Get cluster Center Of Mass
    */
-  void ClusterCOM(const std::vector<const recob::Hit*>& hit_v,
+  void ClusterCOM(const std::vector<art::Ptr<recob::Hit> > hit_v,
 		  double& COMw, double& COMt);
 
   /**
@@ -169,6 +169,7 @@ NeutrinoGammas::NeutrinoGammas(fhicl::ParameterSet const & p)
 {
 
   produces< std::vector< recob::Cluster > >();
+  produces< art::Assns<  recob::Cluster, recob::Hit> >();
 
   // producers
   fClusterProducer = p.get<std::string>("ClusterProducer");
@@ -197,7 +198,7 @@ void NeutrinoGammas::produce(art::Event & e)
   // load clusters and hits already reconstructed by previous step
   art::Handle<std::vector<recob::Cluster> > cluster_h;
   e.getByLabel(fClusterProducer,cluster_h);
-  art::FindMany<recob::Hit> clus_hit_assn_v(cluster_h, e, fHitProducer);
+  art::FindManyP<recob::Hit> clus_hit_assn_v(cluster_h, e, fHitProducer);
   // additionally load cluster -> hit association directly to access hit indices
   //art::Handle< art::Assns<recob::Cluster,recob::Hit,void> > assn_h;
   //e.getByLabel(fAssnProducer,assn_h);
@@ -209,11 +210,11 @@ void NeutrinoGammas::produce(art::Event & e)
   // produce clusters
   std::unique_ptr< std::vector<recob::Cluster> > Cluster_v(new std::vector<recob::Cluster>);
   // and associations
-  //auto Cluster_Hit_Assn_v = std::make_unique< art::Assns<recob::Cluster, recob::Hit> >();
+  auto Cluster_Hit_Assn_v = std::make_unique< art::Assns<recob::Cluster, recob::Hit> >();
 
   // Art Pointer maker
   //lar::PtrMaker<recob::Hit>     makeHitPtr (e, *this);
-  //lar::PtrMaker<recob::Cluster> makeClusPtr(e, *this);
+  lar::PtrMaker<recob::Cluster> makeClusPtr(e, *this);
     
   // if using vertex the vertex will be loaded by the below function:
   auto foundvtx = LoadVertex(e.run(),e.event());
@@ -264,12 +265,10 @@ void NeutrinoGammas::produce(art::Event & e)
 
     _qtot += _qgamma;
 
-    /*
+    // add associations too
     art::Ptr<recob::Cluster> const clusPtr = makeClusPtr(Cluster_v->size()-1);
-    // add associations to hits as well
-    auto const& associated_hits = clus_hit_assn_v.at(c);
-    std::cout << "Associated hits : " << associated_hits << std::endl;
-    */
+    for (auto hitPtr : clus_hit_assn_v.at(c) )
+      Cluster_Hit_Assn_v->addSingle(clusPtr,hitPtr);
 
   }// for all clusters
 
@@ -277,6 +276,7 @@ void NeutrinoGammas::produce(art::Event & e)
   
   
   e.put(std::move(Cluster_v));
+  e.put(std::move(Cluster_Hit_Assn_v));
 
   return;
 }
@@ -332,8 +332,8 @@ void NeutrinoGammas::endJob()
   // Implementation of optional member function here.
 }
 
-void NeutrinoGammas::ClusterCOM(const std::vector<const recob::Hit*>& hit_v,
-			   double& COMw, double& COMt) 
+void NeutrinoGammas::ClusterCOM(const std::vector<art::Ptr<recob::Hit> > hit_v,
+				double& COMw, double& COMt) 
 {
 
   COMw = 0.;
