@@ -235,45 +235,54 @@ void NeutrinoGammas::produce(art::Event & e)
   
   if (fDebug) { std::cout << "Number of cosmics intersecting vertex veto : " << ncosmics << std::endl; }
 
-  // cluster COM info
-  double COMw, COMt;
-
-  // reset total charge for this neutrino interaction
-  _qtot = 0;
-
-  // loop through reconstructed clusters
-  for (size_t c=0; c < cluster_h->size(); c++) {
-
-    ClusterCOM(clus_hit_assn_v.at(c),COMw,COMt);
-
-    // if COM is outside of GammaRadius sphere surrounding vertex -> not interested
-    double dvtxSq = ( (COMw - _wirepos) * (COMw - _wirepos) + (COMt - _tickpos) * (COMt - _tickpos) );
-    if (dvtxSq > fGammaRadiusSq) continue;
-
-    auto const& clus = cluster_h->at(c);
-    //check that clusters have a small area
-    if (ClusterArea(clus) > fClusAreaMax)
-      continue;
+  // only look for deexcitation if no cosmics cross the veto region
+  if (ncosmics == 0) {
     
-    Cluster_v->emplace_back(clus);
+    // cluster COM info
+    double COMw, COMt;
+    
+    // reset total charge for this neutrino interaction
+    _qtot = 0;
+    
+    // loop through reconstructed clusters
+    for (size_t c=0; c < cluster_h->size(); c++) {
+      
+      ClusterCOM(clus_hit_assn_v.at(c),COMw,COMt);
+      
+      // if COM is outside of GammaRadius sphere surrounding vertex -> not interested
+      double dvtxSq = ( (COMw - _wirepos) * (COMw - _wirepos) + (COMt - _tickpos) * (COMt - _tickpos) );
+      if (dvtxSq > fGammaRadiusSq) continue;
+      
+      auto const& clus = cluster_h->at(c);
+      
+      if (fDebug) { std::cout << "cluster area : " << ClusterArea(clus) << std::endl; }
+      
+      //check that clusters have a small area
+      if (ClusterArea(clus) > fClusAreaMax)
+	continue;
+      
+      if (fDebug) { std::cout << "\t saved" << std::endl; }
+      
+      Cluster_v->emplace_back(clus);
+      
+      _wgamma = COMw;
+      _tgamma = COMt;
+      _qgamma = clus.Integral();
+      
+      _gamma_tree->Fill();
+      
+      _qtot += _qgamma;
+      
+      // add associations too
+      art::Ptr<recob::Cluster> const clusPtr = makeClusPtr(Cluster_v->size()-1);
+      for (auto hitPtr : clus_hit_assn_v.at(c) )
+	Cluster_Hit_Assn_v->addSingle(clusPtr,hitPtr);
+      
+    }// for all clusters
+    
+    _nu_tree->Fill();
 
-    _wgamma = COMw;
-    _tgamma = COMt;
-    _qgamma = clus.Integral();
-
-    _gamma_tree->Fill();
-
-    _qtot += _qgamma;
-
-    // add associations too
-    art::Ptr<recob::Cluster> const clusPtr = makeClusPtr(Cluster_v->size()-1);
-    for (auto hitPtr : clus_hit_assn_v.at(c) )
-      Cluster_Hit_Assn_v->addSingle(clusPtr,hitPtr);
-
-  }// for all clusters
-
-  _nu_tree->Fill();
-  
+  }// if no cosmics cross the veto region
   
   e.put(std::move(Cluster_v));
   e.put(std::move(Cluster_Hit_Assn_v));
@@ -342,12 +351,12 @@ void NeutrinoGammas::ClusterCOM(const std::vector<art::Ptr<recob::Hit> > hit_v,
 
   for (auto const& hit : hit_v){
     COMw += hit->WireID().Wire * _wire2cm * hit->Integral();
-    COMt += (hit->PeakTime() - 800)   * _time2cm * hit->Integral();
+    COMt += (hit->PeakTime() - 800) * _time2cm * hit->Integral();
     qtot += hit->Integral();
   }
   
-  COMw /= (hit_v.size() * qtot);
-  COMt /= (hit_v.size() * qtot);
+  COMw /= qtot;
+  COMt /= qtot;
 
   return;
 }

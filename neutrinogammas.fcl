@@ -5,7 +5,7 @@ NeutrinoGammas: {
  HitProducer     : "gammacatcher"   
  ClusterProducer : "gammacatcher"
  TrackProducer   : "pandoraCosmic"
- ClusAreaMax     : 20
+ ClusAreaMax     : 6
  Debug           : true
  TTreeName       : "_tree"
  DirName         : "skimneutrinos"

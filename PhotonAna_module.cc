@@ -313,8 +313,8 @@ void PhotonAna::ClusterCOM(const std::vector<const recob::Hit*>& hit_v,
     qtot += hit->Integral();
   }
   
-  COMw /= (hit_v.size() * qtot);
-  COMt /= (hit_v.size() * qtot);
+  COMw /= qtot;
+  COMt /= qtot;
 
   return;
 }
