@@ -23,6 +23,7 @@
 #include "art/Framework/Services/Optional/TFileService.h"
 
 // Data Products
+#include "lardataobj/RecoBase/Vertex.h"
 #include "lardataobj/RecoBase/Cluster.h"
 #include "lardataobj/RecoBase/Hit.h"
 #include "lardata/Utilities/AssociationUtil.h"
@@ -75,6 +76,9 @@ private:
   // cell-size should be ~x2 of the radius
   double fCellSize;
   double fClusterRadius;
+  // vertex producer when ROI is requested
+  std::string fVtxProducer;
+  double fROI; // in cm, spherical region around vertex to use for clustering
 
   // Proximity clusterer class
   gammacatcher::ProximityClusterer* _ProximityClusterer;
@@ -98,8 +102,10 @@ ProximityClustering::ProximityClustering(fhicl::ParameterSet const & p)
   
   // grab from fhicl file:
   fHitProducer      = p.get<std::string>("HitProducer"  );
+  fVtxProducer      = p.get<std::string>("VtxProducer"  );
   fCellSize         = p.get<double>     ("CellSize"     );
   fClusterRadius    = p.get<double>     ("ClusterRadius");
+  fROI              = p.get<double>     ("ROI"          );
 
 }
 
@@ -116,12 +122,17 @@ void ProximityClustering::produce(art::Event & e)
   auto Cluster_Hit_Assn_v = std::make_unique< art::Assns<recob::Cluster, recob::Hit> >();
 
   // load hits
-  // load RawDigits
   auto const& hit_h = e.getValidHandle<std::vector<recob::Hit> >(fHitProducer);
+
+  // load vertices
+  auto const& vtx_h = e.getValidHandle<std::vector<recob::Vertex> >(fVtxProducer);
 
   // Art Pointer maker
   //lar::PtrMaker<recob::Hit>     makeHitPtr (e, *this);
   lar::PtrMaker<recob::Cluster> makeClusPtr(e, *this);
+
+  // load vertex into algorithm
+  _ProximityClusterer->loadVertex(vtx_h,fROI);
 
   // cluster index vectors will be stored here
   std::vector<std::vector<unsigned int> > cluster_v;

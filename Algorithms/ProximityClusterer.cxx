@@ -304,6 +304,16 @@ namespace gammacatcher {
       double t = hit.PeakTime()*_time2cm;
       double w = hit.WireID().Wire*_wire2cm;
 
+      // if vertex is loaded, make sure within ROI
+      if (_vertex) {
+	// get 2D distance to vertex
+	double d2D = ( (t-_vtx_t_cm[plane]) * (t-_vtx_t_cm[plane]) +
+		       (w-_vtx_w_cm[plane]) * (w-_vtx_w_cm[plane]) );
+	// ignore hit if out of ROI
+	if (d2D > _ROISq) continue;
+      }
+	
+
       // map is (i,j) -> hit list
       // i : ith bin in wire of some width
       // j : jth bin in time of some width
@@ -323,6 +333,47 @@ namespace gammacatcher {
 
     return;
   }
+
+    bool ProximityClusterer::loadVertex(const art::ValidHandle<std::vector<::recob::Vertex> > vtx_h, const double& ROI) {
+
+    _vtx_w_cm = {0., 0., 0.};
+    _vtx_t_cm = {0., 0., 0.};
+
+    _ROISq = ROI*ROI;
+
+    // load required services to obtain offsets
+    auto const* detp = lar::providerFrom<detinfo::DetectorPropertiesService>();
+    auto const& geomH = ::util::GeometryUtilities::GetME();
+    
+    if (vtx_h->size() != 1) {
+      _vertex = false;
+      return false;
+    }
+
+    auto const& vtx = vtx_h->at(0);
+    
+    Double_t xyz[3] = {};
+    vtx.XYZ(xyz);
+
+
+    std::cout << "Vtx coordinates : [" << xyz[0] << ", " << xyz[1] << ", " << xyz[2] << "]" << std::endl;
+
+    for (size_t pl = 0; pl < 3; pl++) {
+
+      auto const& pt = geomH->Get2DPointProjectionCM(xyz,pl);
+      _vtx_w_cm[pl] = pt.w;
+      _vtx_t_cm[pl] = pt.t + (detp->TriggerOffset() * _time2cm);
+
+      std::cout << "trigger offset [cm] : " << (detp->TriggerOffset() * _time2cm) << std::endl;
+      std::cout << "Vtx @ pl " << pl << " [" << _vtx_w_cm[pl] << ", " << _vtx_t_cm[pl] << " ]" << std::endl;
+
+    }
+
+    _vertex = true;
+
+    return true;
+  }
+
 
 }
 #endif

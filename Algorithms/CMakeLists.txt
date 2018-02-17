@@ -2,7 +2,9 @@ art_make(
           LIB_LIBRARIES
 			larcore_Geometry	
 		   	uboone_Geometry		
+			lardata_Utilities	
 			larcore_Geometry_Geometry_service	
+			lardataobj_RecoBase
 			canvas_Utilities
                         ${MF_MESSAGELOGGER}
                         ${MF_UTILITIES}

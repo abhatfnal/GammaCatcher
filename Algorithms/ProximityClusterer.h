@@ -18,6 +18,7 @@
 #include <map>
 
 #include "lardataobj/RecoBase/Hit.h"
+#include "lardataobj/RecoBase/Vertex.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
 #include "larcore/Geometry/Geometry.h"
 #include "larcore/Geometry/GeometryCore.h"
@@ -27,7 +28,7 @@
 namespace gammacatcher {
   /**
      \class ProximityClusterer
-     User custom analysis class made by SHELL_USER_NAME
+     User custom analysis class made by david caratelli
    */
   class ProximityClusterer {
   
@@ -65,6 +66,10 @@ namespace gammacatcher {
     void setRadius(double d) { _radius = d; }
     /// Verbosity setter
     void setVerbose(bool on) { _verbose = on; }
+
+    // vertex coordinates on each plane
+    bool loadVertex(const art::ValidHandle<std::vector<::recob::Vertex> > vtx_h,
+		    const double& ROI);
     
   protected:
 
@@ -102,6 +107,15 @@ namespace gammacatcher {
     /// maximum i'th and j'th
     int _maxI;
     int _maxJ;
+
+    // has the vertex been loaded?
+    bool _vertex;
+    // ROI squared distance max to vertex
+    double _ROISq;
+
+    /// vertex coordinates
+    std::vector<double> _vtx_w_cm;
+    std::vector<double> _vtx_t_cm;
 
   };
 }
