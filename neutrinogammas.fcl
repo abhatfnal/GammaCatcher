@@ -3,7 +3,7 @@ BEGIN_PROLOG
 NeutrinoGammas: {
  module_type     : "NeutrinoGammas"  
  HitProducer     : "gammacatcher"   
- ClusterProducer : "gammacatcher"
+ ClusterProducer : "proximityclustering"
  TrackProducer   : "pandoraCosmic"
  ClusAreaMax     : 6
  Debug           : true

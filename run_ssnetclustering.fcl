@@ -1,18 +1,16 @@
 #include "services_microboone.fcl"
 #include "triggeralgo_service.fcl"
-#include "gammacatcher.fcl"
 #include "proximityclustering.fcl"
-#include "photonana.fcl"
 #include "neutrinogammas.fcl"
 #include "litedatamin_reco2d.fcl"
 
-process_name: GammaCatcher
+process_name: ProximityClusterer
 
 services:
 {
   scheduler:               { defaultExceptions: false }    # Make all uncaught exceptions fatal.
   # Load the service that manages root files for histograms.
-  TFileService:            { fileName: "gammacatcher_ana.root" }
+  TFileService:            { fileName: "proximity_ana.root" }
   TimeTracker:             {}
   ExptGeoHelperInterface:         @local::microboone_geometry_helper
   Geometry:                       @local::microboone_geo
@@ -67,19 +65,18 @@ physics:
   rns:                 { module_type: RandomNumberSaver }
 
   ### gamma catcher
-  gammacatcher        : @local::GammaCatcher
-  proximityclustering : @local::ProximityClustering
-  neutrinogammas      : @local::NeutrinoGammas
+  proximity : @local::ProximityClustering
  }
  analyzers:
  { 
-  photonana : @local::PhotonAna
   llana     : @local::litedatamin_reco2d
 }
 
+
+
  #reco: [ rns, ophit, opflash, simpleFlash, opflashfilter ]
- reco: [ rns, gammacatcher]#, proximityclustering ]#, neutrinogammas ]
- ana:  [ llana ]#photonana, llana ]
+ reco: [ rns, proximity ]
+ ana: [ llana ]
 
  #define the output stream, there could be more than one if using filters 
  stream1:  [ out1 ]
@@ -90,9 +87,11 @@ physics:
 
  #end_paths is a keyword and contains the paths that do not modify the art::Event, 
  #ie analyzers and output streams.  these all run simultaneously
- end_paths:     [stream1,ana]
- #end_paths:     [ana]
+ #end_paths:     [stream1,ana]
+ end_paths:     [ana]
 }
+
+physics.producers.proximity.HitProducer: "ssnethitmaker:shrhit90"
 
 #block to define where the output goes.  if you defined a filter in the physics
 #block and put it in the trigger_paths then you need to put a SelectEvents: {SelectEvents: [XXX]}
@@ -102,7 +101,7 @@ outputs:
  out1:
  {
    module_type: RootOutput
-   fileName:    "gammacatcher.root"
+   fileName:    "proximity.root"
    dataTier:    "reco"
    compressionLevel: 1
    }
@@ -139,14 +138,14 @@ physics.analyzers.llana.out_filename:  "larlite.root"
 physics.analyzers.llana.stream:      "llana"
 
 physics.analyzers.llana.DataLookUpMap: {
-hit: ["gammacatcher"]
-cluster: ["proximityclustering","neutrinogammas"]
-rawdigit: ["wcNoiseFilter"]
+hit: ["gaushit","ssnethitmaker:shrhit90"]
+cluster: ["proximity"]
+#rawdigit: ["wcNoiseFilter"]
 track: ["pandoraNu","pandoraCosmic"]
-vertex: ["pandoraNu"]
+vertex: ["ccvertex"]
 }
 physics.analyzers.llana.AssociationLookUpMap: {
-cluster: ["proximityclustering","neutrinogammas"]
+cluster: ["proximity"]
 }
 
 

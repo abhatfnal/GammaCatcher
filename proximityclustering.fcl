@@ -1,0 +1,10 @@
+BEGIN_PROLOG
+
+ProximityClustering: {
+ module_type   : "ProximityClustering"  
+ HitProducer   : "gammacatcher"
+ CellSize      : 2.0
+ ClusterRadius : 0.8
+}
+
+END_PROLOG

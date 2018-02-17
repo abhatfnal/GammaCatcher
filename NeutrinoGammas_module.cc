@@ -89,12 +89,6 @@ private:
   // minimum impact paramter for track to be considered cosmic
   double fIPmin;
 
-  // TTree variables
-  TTree *_clus_tree;
-  float _qbuffer; // charge in buffer region [ADC x TICK summed over all clusters]
-  float _charge;  // cluster charge [ADC x TICK]
-  float _vtxdist; // distance from reconstructed neutrino vertex, if being used
-
   // TTree for external data storing
   // event and vertex information
   TTree *_evt_tree;
@@ -277,7 +271,7 @@ void NeutrinoGammas::produce(art::Event & e)
       art::Ptr<recob::Cluster> const clusPtr = makeClusPtr(Cluster_v->size()-1);
       for (auto hitPtr : clus_hit_assn_v.at(c) )
 	Cluster_Hit_Assn_v->addSingle(clusPtr,hitPtr);
-      
+
     }// for all clusters
     
     _nu_tree->Fill();
@@ -300,10 +294,6 @@ void NeutrinoGammas::beginJob()
   _time2cm = detp->SamplingRate() / 1000.0 * detp->DriftVelocity( detp->Efield(), detp->Temperature() );
 
   art::ServiceHandle<art::TFileService> tfs;
-  _clus_tree = tfs->make<TTree>("_clus_tree","Cluster Info TTree");
-  _clus_tree->Branch("_charge" ,&_charge ,"charge/F" );
-  _clus_tree->Branch("_qbuffer",&_qbuffer,"qbuffer/F");
-  _clus_tree->Branch("_vtxdist",&_vtxdist,"vtxdist/F");
 
   // load TTree from disk where event/vertex info is stored
   TFile* f = new TFile(fTFileName.c_str());

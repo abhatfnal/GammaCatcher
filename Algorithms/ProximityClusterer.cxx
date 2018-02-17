@@ -16,10 +16,10 @@ namespace gammacatcher {
     return true;
   }
   
-  bool ProximityClusterer::cluster(const std::unique_ptr< std::vector<recob::Hit> >& Hit_v,
+  bool ProximityClusterer::cluster(const art::ValidHandle<std::vector<recob::Hit> >& hit_h,
 				   std::vector<std::vector<unsigned int> >& _out_cluster_vector) {
 
-    if (!Hit_v)
+    if (hit_h->size() == 0)
       return false;
 
 
@@ -37,7 +37,7 @@ namespace gammacatcher {
     for (int pl=0; pl < 3; pl++){
 
       // hit map will only contain hits we want to use for clustering
-      MakeHitMap(Hit_v,pl);
+      MakeHitMap(hit_h,pl);
       
       // iterator for hit cell map
       std::map<std::pair<int,int>, std::vector<size_t> >::iterator it;
@@ -71,8 +71,8 @@ namespace gammacatcher {
 	    auto const& hit2 = neighborhits[h2];
 	    if (hit1 == hit2) continue;
 	    // are the hits compatible?
-	    bool compat = HitsCompatible(Hit_v->at(hit1),
-					 Hit_v->at(hit2));
+	    bool compat = HitsCompatible(hit_h->at(hit1),
+					 hit_h->at(hit2));
 	    // should the hits go in the same cluster?
 	    if (compat){
 	      matched = true;
@@ -287,7 +287,7 @@ namespace gammacatcher {
     return false;
   }
   
-  void ProximityClusterer::MakeHitMap(const std::unique_ptr< std::vector<recob::Hit> >& hitlist, int plane){
+  void ProximityClusterer::MakeHitMap(const art::ValidHandle<std::vector<recob::Hit> >& hitlist, int plane){
     
     _hitMap.clear();
     // temporary pair

@@ -3,7 +3,7 @@ BEGIN_PROLOG
 PhotonAna: {
  module_type : "PhotonAna"  
  HitProducer : "gammacatcher"   
- ClusterProducer : "gammacatcher"
+ ClusterProducer : "proximityclustering"
  VertexProducer : "pandoraNu"
  AssnProducer : "NuMuCCSelectionII"
  Buffer : 20

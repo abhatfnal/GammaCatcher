@@ -25,7 +25,6 @@
 #include "art/Framework/Services/Optional/TFileService.h"
 
 // Data Products
-#include "lardataobj/RecoBase/Cluster.h"
 #include "lardataobj/RecoBase/Hit.h"
 #include "lardataobj/RawData/RawDigit.h"
 #include "lardata/Utilities/AssociationUtil.h"
@@ -43,7 +42,6 @@
 
 // Algorithms
 #include "Algorithms/HitFinding.h"
-#include "Algorithms/ProximityClusterer.h"
 
 class GammaCatcher;
 
@@ -79,17 +77,9 @@ public:
   float  _ampl;
   float  _area;
   int    _nticks;
-  
-
-  // TTree where to store cluster-related variables
-  TTree* _clus_tree;
-  float  _charge;
-  int    _nhits;
 
   // HitFinding class
   gammacatcher::HitFinding* _HitFinding;
-  // Proximity clusterer class
-  gammacatcher::ProximityClusterer* _ProximityClusterer;
 
 private:
 
@@ -101,23 +91,8 @@ private:
   int fMinTickWidth;
   // tick buffer to integrate ADCs below hit threshold
   int fHitTickBuffer;
-  // clustering radius and cell size 
-  // [radius is going to be the physically important quantity
-  // cell-size is only for algorithm implementation]
-  // cell-size should be ~x2 of the radius
-  double fCellSize;
-  double fClusterRadius;
-  
-  /**
-     Make clusters
-   */
-  void MakeClusters(const std::unique_ptr< std::vector<recob::Hit> >& hits,
-		    const std::vector<std::vector<unsigned int> >& cluster_idx_v,
-		    std::unique_ptr< std::vector<recob::Cluster> >& clusters,
-		    std::unique_ptr<art::Assns<recob::Cluster, recob::Hit> >& assns,
-		    lar::PtrMaker<recob::Hit> HitPtrMaker,
-		    lar::PtrMaker<recob::Cluster> ClusPtrMaker);
 
+  
 };
 
 
@@ -127,16 +102,12 @@ GammaCatcher::GammaCatcher(fhicl::ParameterSet const & p)
 {
 
   produces< std::vector< recob::Hit > >();
-  produces< std::vector< recob::Cluster > >();
-  produces< art::Assns<  recob::Cluster, recob::Hit> >();
   
   // grab from fhicl file:
   fRawDigitProducer = p.get<std::string>("RawDigitProducer");
   fNSigma           = p.get<double>     ("NSigma"          );
   fMinTickWidth     = p.get<int>        ("MinTickWidth"    );
   fHitTickBuffer    = p.get<int>        ("HitTickBuffer"   );
-  fCellSize         = p.get<double>     ("CellSize"        );
-  fClusterRadius    = p.get<double>     ("ClusterRadius"   );
 
 }
 
@@ -153,15 +124,7 @@ void GammaCatcher::produce(art::Event & e)
 
   // produce Hit objects
   std::unique_ptr< std::vector<recob::Hit> > Hit_v(new std::vector<recob::Hit>);
-  // produce Cluster objects
-  std::unique_ptr< std::vector<recob::Cluster> > Cluster_v(new std::vector<recob::Cluster>);
-  // produce associations
-  auto Cluster_Hit_Assn_v = std::make_unique< art::Assns<recob::Cluster, recob::Hit> >();
 
-  // Art Pointer maker
-  lar::PtrMaker<recob::Hit>     makeHitPtr (e, *this);
-  lar::PtrMaker<recob::Cluster> makeClusPtr(e, *this);
-  
   // load RawDigits
   art::Handle<std::vector<raw::RawDigit> > rawdigit_h;
   e.getByLabel(fRawDigitProducer,rawdigit_h);
@@ -200,17 +163,7 @@ void GammaCatcher::produce(art::Event & e)
 
   }// for all RawDigit objects
 
-  // cluster index vectors will be stored here
-  std::vector<std::vector<unsigned int> > cluster_v;
-  // cluster hits together
-  _ProximityClusterer->cluster(Hit_v,cluster_v);
-
-  // go through indices and make clusters
-  MakeClusters(Hit_v, cluster_v, Cluster_v, Cluster_Hit_Assn_v, makeHitPtr, makeClusPtr);
-
   e.put(std::move(Hit_v));
-  e.put(std::move(Cluster_v));
-  e.put(std::move(Cluster_Hit_Assn_v));
 
 }
 
@@ -233,79 +186,16 @@ void GammaCatcher::beginJob()
   _hit_tree->Branch("_area"  ,&_area  ,"area/F"  );
   _hit_tree->Branch("_nticks",&_nticks,"nticks/I");
   
-  _clus_tree = tfs->make<TTree>("_clus_tree","Cluster Info TTree");
-  _clus_tree->Branch("_charge",&_charge,"charge/F");
-  _clus_tree->Branch("_nhits" ,&_nhits ,"nhits/I" );
-  
   _HitFinding = new gammacatcher::HitFinding();
   _HitFinding->setNSigma(fNSigma);
   _HitFinding->setMinTickWidth(fMinTickWidth);
   _HitFinding->setHitTickBuffer(fHitTickBuffer);
 
-  _ProximityClusterer = new gammacatcher::ProximityClusterer();
-  _ProximityClusterer->initialize();
-  _ProximityClusterer->setRadius(fClusterRadius);
-  _ProximityClusterer->setCellSize(fCellSize);
-  
 }
 
 void GammaCatcher::endJob()
 {
   // Implementation of optional member function here.
-}
-
-
-void GammaCatcher::MakeClusters(const std::unique_ptr< std::vector<recob::Hit> >& hits,
-				const std::vector<std::vector<unsigned int> >& cluster_v,
-				std::unique_ptr< std::vector<recob::Cluster> >& clusters,
-				std::unique_ptr< art::Assns<recob::Cluster, recob::Hit> >& assns,
-				lar::PtrMaker<recob::Hit> HitPtrMaker,
-				lar::PtrMaker<recob::Cluster> ClusPtrMaker)
-{
-
-  clusters->clear();
-
-  for (size_t n=0; n < cluster_v.size(); n++) {
-    auto const& clus_idx_v = cluster_v.at(n);
-    if (clus_idx_v.size() == 0) continue;
-    float w_min = 9999;
-    float t_min = 9999;
-    float w_max = -1;
-    float t_max = -1;
-    float integral = 0;
-    for (auto const& hit_idx : clus_idx_v) {
-      auto const& hit = hits->at(hit_idx);
-      float t = hit.PeakTime();
-      float w = hit.WireID().Wire;
-      if (t > t_max) t_max = t;
-      if (t < t_min) t_min = t;
-      if (w > w_max) w_max = w;
-      if (w < w_min) w_min = w;
-      integral += hit.Integral();
-    }// for all hits
-    recob::Cluster clus(w_min, 0., t_min, 0., 0., 0., 0., 
-			w_max, 0., t_max, 0., 0., 0., 0., 
-			integral, 0., integral, 0., 
-			clus_idx_v.size(), 0., 0., n,
-			hits->at(clus_idx_v[0]).View(),
-			geo::PlaneID(0,0,hits->at(clus_idx_v[0]).WireID().Plane));
-    
-    _charge = integral;
-    _nhits  = clus_idx_v.size();
-    _clus_tree->Fill();
-
-    clusters->emplace_back(clus);
-
-    // fill associations
-    art::Ptr<recob::Cluster> const ClusPtr = ClusPtrMaker(clusters->size()-1);
-    for (auto const& hit_idx : clus_idx_v) {
-      art::Ptr<recob::Hit> const HitPtr = HitPtrMaker(hit_idx);
-      assns->addSingle(ClusPtr,HitPtr);
-    }// for all hits
-    
-  }// for all clusters
-
-  return;
 }
 
 DEFINE_ART_MODULE(GammaCatcher)

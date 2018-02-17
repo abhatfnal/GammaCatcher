@@ -54,7 +54,7 @@ namespace gammacatcher {
        Input: pointer to event hit record.
        Output: vector of vector of hit indices which make up clusters
     */
-    bool cluster(const std::unique_ptr< std::vector<recob::Hit> >& Hit_v,
+    bool cluster(const art::ValidHandle<std::vector<recob::Hit> >& hit_h,
 		 std::vector<std::vector<unsigned int> >& _out_cluster_vector);
 
     /// Set the size of each cell for hit-map
@@ -84,7 +84,7 @@ namespace gammacatcher {
     double _wire2cm, _time2cm;
 
     /// Map making function
-    void MakeHitMap(const std::unique_ptr< std::vector<recob::Hit> >& hitlist,
+    void MakeHitMap(const art::ValidHandle<std::vector<recob::Hit> >& hit_h,
 		    int plane);
 
     /// Functions to decide if two hits should belong to the same cluster or not
