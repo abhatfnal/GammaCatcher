@@ -5,6 +5,8 @@ CosmicFilter: {
  HitProducer   : "ssnethitmaker:shrhit90"
  VtxProducer   : "ccvertex"
  TrkProducer   : "pandoraCosmic"
+ CluProducer   : "pandoraCosmic"
+ PFPProducer   : "pandoraCosmic"
  VetoRadius    : 150.
  IPmin         : 10.
 }

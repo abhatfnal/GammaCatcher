@@ -27,8 +27,10 @@
 #include "lardata/Utilities/GeometryUtilities.h"
 #include "lardata/DetectorInfoServices/DetectorPropertiesService.h"
 
+#include "lardataobj/RecoBase/PFParticle.h"
 #include "lardataobj/RecoBase/Track.h"
 #include "lardataobj/RecoBase/Vertex.h"
+#include "lardataobj/RecoBase/Cluster.h"
 #include "lardataobj/RecoBase/Hit.h"
 #include "lardata/Utilities/AssociationUtil.h"
 
@@ -66,11 +68,13 @@ private:
 
   // channel list for SSNet hits connecting channel number to list of hit indices
   std::map<unsigned int, std::vector<size_t> > _hitmap;
+  // map coonecting PFP associated track key to hit keys
+  std::map<size_t, std::vector< art::Ptr<recob::Hit> > > _pfpmap;
 
   Float_t _xpos, _ypos, _zpos; // xyz of vertex
 
   // producers
-  std::string fVtxProducer, fTrkProducer, fHitProducer;
+  std::string fPFPProducer, fVtxProducer, fTrkProducer, fCluProducer, fHitProducer;
   // veto radius -> surrounds nu vtx and is used to identify crossing cosmic-rays
   double fVetoRadius;
   // square of radius for faster computation
@@ -104,6 +108,8 @@ CosmicFilter::CosmicFilter(fhicl::ParameterSet const & p)
   fHitProducer = p.get<std::string>("HitProducer");
   fVtxProducer = p.get<std::string>("VtxProducer");
   fTrkProducer = p.get<std::string>("TrkProducer");
+  fCluProducer = p.get<std::string>("CluProducer");
+  fPFPProducer = p.get<std::string>("PFPProducer");
   fVetoRadius  = p.get<double>     ("VetoRadius" );
   fIPmin       = p.get<double>     ("IPmin"      );
 
@@ -114,12 +120,23 @@ void CosmicFilter::produce(art::Event & e)
 {
   // Implementation of required member function here.
 
+  // grab pfparticles
+  auto const& pfp_h = e.getValidHandle<std::vector<recob::PFParticle>>(fPFPProducer);
   // grab tracks
   auto const& trk_h = e.getValidHandle<std::vector<recob::Track>>(fTrkProducer);
+  // grab clusters
+  auto const& clu_h = e.getValidHandle<std::vector<recob::Cluster>>(fCluProducer);
   // grab ssnet hits
   auto const& hit_h = e.getValidHandle<std::vector<recob::Hit>>(fHitProducer);
   // grab vertex
   auto const& vtx_h = e.getValidHandle<std::vector<recob::Vertex>>(fVtxProducer);
+
+  // grab tracks and clusters associated to PFParticle
+  art::FindManyP<recob::Track  > pfp_trk_assn_v(pfp_h, e, fPFPProducer);
+  art::FindManyP<recob::Cluster> pfp_clu_assn_v(pfp_h, e, fPFPProducer);
+
+  // grab hits associated to clusters
+  art::FindManyP<recob::Hit> clu_hit_assn_v(clu_h, e, fCluProducer);
 
   // grab hits associated to track
   art::FindManyP<recob::Hit> trk_hit_assn_v(trk_h, e, fTrkProducer);
@@ -148,6 +165,57 @@ void CosmicFilter::produce(art::Event & e)
   // indices of the SSNet hits on that channel.
   FillChannelMap(hit_h);
   // END : PERFORM HIT MATCHING
+  
+  // BEGIN : LOOP THROUGH ALL PFParticles
+  for (size_t p=0; p < pfp_h->size(); p++) {
+
+    auto const& pfp = pfp_h->at(p);
+
+    // skip non-primary pfparticles
+    if (pfp.IsPrimary() == false) continue;
+    
+    // is it muon-like? if not skip
+    if (pfp.PdgCode() != 13) continue;
+    
+    // grab associated track ID
+    const std::vector<art::Ptr<recob::Track> > pfp_trk_v = pfp_trk_assn_v.at(p);
+    if (pfp_trk_v.size() != 1) 
+      std::cout << "\t\t DD \t\t PFP associated to != 1 track" << std::endl;
+    
+    // if no tracks associated -> skip
+    if (pfp_trk_v.size() == 0) continue;
+
+    // get track key
+    auto trkKey = pfp_trk_v.at(0).key();
+    _pfpmap[trkKey] = std::vector<art::Ptr<recob::Hit>>{};
+
+    // get daughters
+    std::vector<size_t> daughters = pfp.Daughters();
+
+    // find associated PFParticle daughters which are electron-like (delta-ray)
+    for (size_t pp=0; pp < pfp_h->size(); pp++) {
+
+      auto const& pfp2 = pfp_h->at(pp);
+
+      // search through daughters
+      for (auto const& daughterID : daughters) {
+	if ( (pfp2.Self() == daughterID) && (pfp2.PdgCode() == 11) ) {
+
+	  // grab associated clusters
+	  const std::vector<art::Ptr<recob::Cluster> > pfp_clu_v = pfp_clu_assn_v.at(pp);
+	  // for each cluster, find associated hits
+	  for (size_t c=0; c < pfp_clu_v.size(); c++) {
+	    // grab key and find hits
+	    const std::vector<art::Ptr<recob::Hit> > clu_hit_v = clu_hit_assn_v.at( pfp_clu_v.at(c).key() );
+	    // and add their indices to the pfp map
+	    for (size_t h=0; h < clu_hit_v.size(); h++)
+	      _pfpmap[trkKey].push_back( clu_hit_v.at(h) );
+	  }// for all clusters associated to PFP
+	}// if is daughter
+      }// for all daughters
+    }// second pfparticle loop
+  }// for all PFParticles
+  // END : PFPARTICLE MAP SCAN TO FIND DELTA-RAYS
 
   // BEGIN : IDENTIFY COSMIC TRACK HITS
   for (size_t t=0; t < trk_h->size(); t++) {
@@ -178,9 +246,29 @@ void CosmicFilter::produce(art::Event & e)
 	}// for all hit indices associated to this channel
       }// if the hit channel is in the SSNet hit map
     }// for all hits associated to track
+
+
+    // for all deltay-rays associated to track, if they exist
+    if ( _pfpmap.find(t) != _pfpmap.end() ) {
+      auto const& pfp_hit_ptr_v = _pfpmap[t];
+      for (size_t h=0; h < pfp_hit_ptr_v.size(); h++) {
+	auto hitPtr = pfp_hit_ptr_v.at(h);// hit_h->at( pfp_hit_idx_v[h] );
+	// if the hit channel is in the SSNet hit map:
+	if (_hitmap.find( hitPtr->Channel() ) != _hitmap.end() ){
+	  auto const& hitidx_v = _hitmap[ hitPtr->Channel() ];
+	  for (auto const& idx : hitidx_v) {
+	    // compare hit information
+	    if ( hit_h->at(idx).PeakTime() == hitPtr->PeakTime() )
+	      _trkhits.push_back( idx ); // save idx of SSNet hit to be removed
+	  }// for all hit indices associated to this channel
+	}// if the hit channel is in the SSNet hit map
+      }// for all hits associated to track
+    }// if delta-rays associated to track
+    
+    
   }// for all tracks
   // END : IDENTIFY COSMIC TRACK HITS
-
+  
   // finally, save hits not identified as track-like
   for (size_t idx=0; idx < hit_h->size(); idx++) {
     // has this index been flagged?
