@@ -1,0 +1,12 @@
+BEGIN_PROLOG
+
+CosmicFilter: {
+ module_type   : "CosmicFilter"  
+ HitProducer   : "ssnethitmaker:shrhit90"
+ VtxProducer   : "ccvertex"
+ TrkProducer   : "pandoraCosmic"
+ VetoRadius    : 150.
+ IPmin         : 10.
+}
+
+END_PROLOG
