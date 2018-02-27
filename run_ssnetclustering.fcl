@@ -2,6 +2,7 @@
 #include "triggeralgo_service.fcl"
 #include "proximityclustering.fcl"
 #include "neutrinogammas.fcl"
+#include "cosmicfilter.fcl"
 #include "litedatamin_reco2d.fcl"
 
 process_name: ProximityClusterer
@@ -65,6 +66,7 @@ physics:
   rns:                 { module_type: RandomNumberSaver }
 
   ### gamma catcher
+  cosmicfilter: @local::CosmicFilter
   proximity : @local::ProximityClustering
  }
  analyzers:
@@ -75,7 +77,7 @@ physics:
 
 
  #reco: [ rns, ophit, opflash, simpleFlash, opflashfilter ]
- reco: [ rns, proximity ]
+ reco: [ rns, cosmicfilter, proximity ]
  ana: [ llana ]
 
  #define the output stream, there could be more than one if using filters 
@@ -91,7 +93,7 @@ physics:
  end_paths:     [ana]
 }
 
-physics.producers.proximity.HitProducer: "ssnethitmaker:shrhit90"
+physics.producers.proximity.HitProducer: "cosmicfilter"
 
 #block to define where the output goes.  if you defined a filter in the physics
 #block and put it in the trigger_paths then you need to put a SelectEvents: {SelectEvents: [XXX]}
@@ -138,7 +140,7 @@ physics.analyzers.llana.out_filename:  "larlite.root"
 physics.analyzers.llana.stream:      "llana"
 
 physics.analyzers.llana.DataLookUpMap: {
-hit: ["gaushit","ssnethitmaker:shrhit90"]
+hit: ["gaushit","ssnethitmaker:shrhit90","cosmicfilter"]
 cluster: ["proximity","pandoraCosmic"]
 #rawdigit: ["wcNoiseFilter"]
 track: ["pandoraNu","pandoraCosmic"]

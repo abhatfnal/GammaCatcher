@@ -223,12 +223,17 @@ void CosmicFilter::produce(art::Event & e)
     auto const& trk = trk_h->at(t);
     auto trkdist = SphereIntersection(trk);
     
-    // if no intersections -> skip
-    if (trkdist.first == 0) continue;
+    std::cout << "Track has " << trkdist.first << " intersections w/ vertex ROI. IP min is : " << trkdist.second << std::endl;
+    std::cout << "Track start [x,z] -> " << trk.Vertex().X() << ", " << trk.Vertex().Z() << std::endl;
+    std::cout << "Track end   [x,z] -> " << trk.End().X()    << ", " << trk.End().Z()    << std::endl;
+
+    // if no intersections -> check IP
+    if ( (trkdist.first == 0) && (trkdist.second < fIPmin) ) continue;
 
     // if a single intersection -> check IP
     // if smaller then IP min -> neutrino track -> skip
     if ( (trkdist.first == 1) && (trkdist.second < fIPmin) ) continue;
+
 
     // in all other cases, track is cosmic-like
     // grab associated hits and compare to SSNet hits
@@ -276,8 +281,11 @@ void CosmicFilter::produce(art::Event & e)
       Hit_v->emplace_back(hit_h->at(idx));
   }// for all track hit indices
 
+  std::cout << "input hits  : " << hit_h->size() << std::endl;
+  std::cout << "output hits : " << Hit_v->size() << std::endl;
+  
   e.put(std::move(Hit_v));
-
+  
 }
 
 void CosmicFilter::beginJob()
