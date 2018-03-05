@@ -74,10 +74,8 @@ physics:
   llana     : @local::litedatamin_reco2d
 }
 
-
-
  #reco: [ rns, ophit, opflash, simpleFlash, opflashfilter ]
- reco: [ rns, cosmicfilter]#,proximity ]
+ reco: [ rns, cosmicfilter,proximity ]
  ana: [ llana ]
 
  #define the output stream, there could be more than one if using filters 
@@ -89,11 +87,14 @@ physics:
 
  #end_paths is a keyword and contains the paths that do not modify the art::Event, 
  #ie analyzers and output streams.  these all run simultaneously
- #end_paths:     [stream1,ana]
- end_paths:     [ana]
+ end_paths:     [stream1,ana]
+ #end_paths:     [ana]
 }
 
-physics.producers.proximity.HitProducer: "ssnethitmaker:shrhit90"
+physics.producers.cosmicfilter.VtxProducer: "filterneutrinos"
+physics.producers.proximity.VtxProducer: "filterneutrinos"
+#physics.producers.proximity.HitProducer: "ssnethitmaker:shrhit90"
+physics.producers.proximity.HitProducer: "ssnethitmaker:shrhitvariable"
 
 #block to define where the output goes.  if you defined a filter in the physics
 #block and put it in the trigger_paths then you need to put a SelectEvents: {SelectEvents: [XXX]}
@@ -140,14 +141,14 @@ physics.analyzers.llana.out_filename:  "larlite.root"
 physics.analyzers.llana.stream:      "llana"
 
 physics.analyzers.llana.DataLookUpMap: {
-hit: ["gaushit","ssnethitmaker:shrhit90","cosmicfilter"]
-#cluster: ["proximity","pandoraCosmic"]
+hit: ["gaushit","ssnethitmaker:shrhit90","cosmicfilter","ssnethitmaker:shrhitvariable"]
+cluster: ["proximity","pandoraCosmic"]
 #rawdigit: ["wcNoiseFilter"]
 track: ["pandoraNu","pandoraCosmic"]
 vertex: ["ccvertex"]
 }
 physics.analyzers.llana.AssociationLookUpMap: {
-#cluster: ["proximity","pandoraCosmic"]
+cluster: ["proximity","pandoraCosmic"]
 }
 
 

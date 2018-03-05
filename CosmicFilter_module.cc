@@ -81,6 +81,8 @@ private:
   double fVetoRadiusSq;
   // minimum impact paramter for track to be considered cosmic
   double fIPmin;
+  // mininum track length for cosmics 
+  double fMinTrkLength;
 
   // vector of track-like hit indices
   std::vector<size_t> _trkhits;
@@ -105,13 +107,14 @@ CosmicFilter::CosmicFilter(fhicl::ParameterSet const & p)
 {
   produces< std::vector< recob::Hit > >();
 
-  fHitProducer = p.get<std::string>("HitProducer");
-  fVtxProducer = p.get<std::string>("VtxProducer");
-  fTrkProducer = p.get<std::string>("TrkProducer");
-  fCluProducer = p.get<std::string>("CluProducer");
-  fPFPProducer = p.get<std::string>("PFPProducer");
-  fVetoRadius  = p.get<double>     ("VetoRadius" );
-  fIPmin       = p.get<double>     ("IPmin"      );
+  fHitProducer  = p.get<std::string>("HitProducer");
+  fVtxProducer  = p.get<std::string>("VtxProducer");
+  fTrkProducer  = p.get<std::string>("TrkProducer");
+  fCluProducer  = p.get<std::string>("CluProducer");
+  fPFPProducer  = p.get<std::string>("PFPProducer");
+  fVetoRadius   = p.get<double>     ("VetoRadius" );
+  fIPmin        = p.get<double>     ("IPmin"      );
+  fMinTrkLength = p.get<double>     ("MinTrkLength");
 
   fVetoRadiusSq    = fVetoRadius * fVetoRadius;
 }
@@ -221,6 +224,14 @@ void CosmicFilter::produce(art::Event & e)
   for (size_t t=0; t < trk_h->size(); t++) {
 
     auto const& trk = trk_h->at(t);
+
+    // basic filters on track
+    // must be some minimum length
+    if (trk.Length() < fMinTrkLength) continue;
+
+    // and track length must be < twice start-end distance
+    if (trk.Length() > 2 * (trk.Vertex()-trk.End()).Mag() ) continue;
+
     auto trkdist = SphereIntersection(trk);
     
     std::cout << "Track has " << trkdist.first << " intersections w/ vertex ROI. IP min is : " << trkdist.second << std::endl;
@@ -233,7 +244,6 @@ void CosmicFilter::produce(art::Event & e)
     // if a single intersection -> check IP
     // if smaller then IP min -> neutrino track -> skip
     if ( (trkdist.first == 1) && (trkdist.second < fIPmin) ) continue;
-
 
     // in all other cases, track is cosmic-like
     // grab associated hits and compare to SSNet hits
@@ -252,6 +262,9 @@ void CosmicFilter::produce(art::Event & e)
       }// if the hit channel is in the SSNet hit map
     }// for all hits associated to track
 
+
+    // remove delta-rays if within 50 cm
+    if ( (trkdist.first <= 1) && (trkdist.second < 5*fIPmin) ) continue;
 
     // for all deltay-rays associated to track, if they exist
     if ( _pfpmap.find(t) != _pfpmap.end() ) {

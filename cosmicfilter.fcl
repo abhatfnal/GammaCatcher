@@ -9,6 +9,7 @@ CosmicFilter: {
  PFPProducer   : "pandoraCosmic"
  VetoRadius    : 150.
  IPmin         : 10.
+ MinTrkLength  : 50.
 }
 
 END_PROLOG
