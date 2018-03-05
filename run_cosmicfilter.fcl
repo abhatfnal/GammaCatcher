@@ -66,6 +66,9 @@ physics:
   rns:                 { module_type: RandomNumberSaver }
 
   ### gamma catcher
+  ccvertex: { module_type: CCVertex
+              AssnProducer: "NuMuCCSelectionII"
+            }
   proximity : @local::ProximityClustering
   cosmicfilter : @local::CosmicFilter
  }
@@ -75,7 +78,7 @@ physics:
 }
 
  #reco: [ rns, ophit, opflash, simpleFlash, opflashfilter ]
- reco: [ rns, cosmicfilter,proximity ]
+ reco: [ rns, ccvertex, cosmicfilter, proximity ]
  ana: [ llana ]
 
  #define the output stream, there could be more than one if using filters 
@@ -91,8 +94,8 @@ physics:
  #end_paths:     [ana]
 }
 
-physics.producers.cosmicfilter.VtxProducer: "filterneutrinos"
-physics.producers.proximity.VtxProducer: "filterneutrinos"
+physics.producers.cosmicfilter.VtxProducer: "ccvertex"
+physics.producers.proximity.VtxProducer: "ccvertex"
 #physics.producers.proximity.HitProducer: "ssnethitmaker:shrhit90"
 physics.producers.proximity.HitProducer: "ssnethitmaker:shrhitvariable"
 
