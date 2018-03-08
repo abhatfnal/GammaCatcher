@@ -1,7 +1,7 @@
 ////////////////////////////////////////////////////////////////////////
-// Class:       GammaCatcher
+// Class:       HitMaker
 // Plugin Type: producer (art v2_05_01)
-// File:        GammaCatcher_module.cc
+// File:        HitMaker_module.cc
 //
 // Generated at Sun Jan 28 22:25:13 2018 by David Caratelli using cetskelgen
 // David Caratelli - davidc@fnal.gov
@@ -43,20 +43,20 @@
 // Algorithms
 #include "Algorithms/HitFinding.h"
 
-class GammaCatcher;
+class HitMaker;
 
 
-class GammaCatcher : public art::EDProducer {
+class HitMaker : public art::EDProducer {
 public:
-  explicit GammaCatcher(fhicl::ParameterSet const & p);
+  explicit HitMaker(fhicl::ParameterSet const & p);
   // The compiler-generated destructor is fine for non-base
   // classes without bare pointers or other resource use.
 
   // Plugins should not be copied or assigned.
-  GammaCatcher(GammaCatcher const &) = delete;
-  GammaCatcher(GammaCatcher &&) = delete;
-  GammaCatcher & operator = (GammaCatcher const &) = delete;
-  GammaCatcher & operator = (GammaCatcher &&) = delete;
+  HitMaker(HitMaker const &) = delete;
+  HitMaker(HitMaker &&) = delete;
+  HitMaker & operator = (HitMaker const &) = delete;
+  HitMaker & operator = (HitMaker &&) = delete;
 
   // Required functions.
   void produce(art::Event & e) override;
@@ -96,7 +96,7 @@ private:
 };
 
 
-GammaCatcher::GammaCatcher(fhicl::ParameterSet const & p)
+HitMaker::HitMaker(fhicl::ParameterSet const & p)
 // :
 // Initialize member data here.
 {
@@ -111,7 +111,7 @@ GammaCatcher::GammaCatcher(fhicl::ParameterSet const & p)
 
 }
 
-void GammaCatcher::produce(art::Event & e)
+void HitMaker::produce(art::Event & e)
 {
 
   _evt  = e.event();
@@ -168,7 +168,7 @@ void GammaCatcher::produce(art::Event & e)
 }
 
 
-void GammaCatcher::beginJob()
+void HitMaker::beginJob()
 {
 
   // set TTree branches
@@ -193,9 +193,9 @@ void GammaCatcher::beginJob()
 
 }
 
-void GammaCatcher::endJob()
+void HitMaker::endJob()
 {
   // Implementation of optional member function here.
 }
 
-DEFINE_ART_MODULE(GammaCatcher)
+DEFINE_ART_MODULE(HitMaker)
