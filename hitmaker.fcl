@@ -1,7 +1,7 @@
 BEGIN_PROLOG
 
-GammaCatcher: {
- module_type      : "GammaCatcher"  
+HitMaker: {
+ module_type      : "HitMaker"  
  RawDigitProducer : "wcNoiseFilter"   
  NSigma           : 5.0
  MinTickWidth     : 2

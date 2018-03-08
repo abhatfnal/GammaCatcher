@@ -1,13 +1,13 @@
 ////////////////////////////////////////////////////////////////////////
 // Class:       CCVertex
-// Plugin Type: producer (art v2_05_01)
+// Plugin Type: filter (art v2_09_06)
 // File:        CCVertex_module.cc
 //
-// Generated at Mon Mar  5 07:42:03 2018 by David Caratelli using cetskelgen
-// from cetlib version v1_21_00.
+// Generated at Mon Mar  5 14:14:25 2018 by David Caratelli using cetskelgen
+// from cetlib version v3_01_03.
 ////////////////////////////////////////////////////////////////////////
 
-#include "art/Framework/Core/EDProducer.h"
+#include "art/Framework/Core/EDFilter.h"
 #include "art/Framework/Core/ModuleMacros.h"
 #include "art/Framework/Principal/Event.h"
 #include "art/Framework/Principal/Handle.h"
@@ -25,11 +25,10 @@
 #include "lardataobj/RecoBase/Track.h"
 #include "lardata/Utilities/AssociationUtil.h"
 
-
 class CCVertex;
 
 
-class CCVertex : public art::EDProducer {
+class CCVertex : public art::EDFilter {
 public:
   explicit CCVertex(fhicl::ParameterSet const & p);
   // The compiler-generated destructor is fine for non-base
@@ -42,13 +41,15 @@ public:
   CCVertex & operator = (CCVertex &&) = delete;
 
   // Required functions.
-  void produce(art::Event & e) override;
+  bool filter(art::Event & e) override;
 
   // Selected optional functions.
   void beginJob() override;
   void endJob() override;
 
 private:
+
+  // Declare member data here.
 
   // producers
   std::string fAssnProducer;
@@ -61,11 +62,10 @@ CCVertex::CCVertex(fhicl::ParameterSet const & p)
 // Initialize member data here.
 {
   produces< std::vector< recob::Vertex > >();
-
   fAssnProducer = p.get<std::string>("AssnProducer");
 }
 
-void CCVertex::produce(art::Event & e)
+bool CCVertex::filter(art::Event & e)
 {
 
   // produce vertex
@@ -77,8 +77,7 @@ void CCVertex::produce(art::Event & e)
   e.getByLabel(fAssnProducer,numuCCassn_h);
   if (numuCCassn_h->size() != 1){
     std::cout << "Number of vertices != 1 -> ERROR ERROR ERROR" << std::endl;
-    e.put(std::move(Vtx_v));
-    return;
+    return false;
   }
   
   numuCCassn_h->at(0).first->XYZ(xyz);
@@ -87,6 +86,8 @@ void CCVertex::produce(art::Event & e)
   Vtx_v->emplace_back(vtx);
   
   e.put(std::move(Vtx_v));
+
+  return true;
 }
 
 void CCVertex::beginJob()
