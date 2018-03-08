@@ -1,17 +1,13 @@
 #include "services_microboone.fcl"
 #include "triggeralgo_service.fcl"
-#include "proximityclustering.fcl"
-#include "neutrinogammas.fcl"
-#include "cosmicfilter.fcl"
-#include "litedatamin_reco2d.fcl"
 
-process_name: ProximityClusterer
+process_name: Pi0EventFilter
 
 services:
 {
   scheduler:               { defaultExceptions: false }    # Make all uncaught exceptions fatal.
   # Load the service that manages root files for histograms.
-  TFileService:            { fileName: "proximity_ana.root" }
+  TFileService:            { fileName: "pi0eventfilter_ana.root" }
   TimeTracker:             {}
   ExptGeoHelperInterface:         @local::microboone_geometry_helper
   Geometry:                       @local::microboone_geo
@@ -22,25 +18,7 @@ services:
   RandomNumberGenerator:   {} #ART native random number generator
   message:                 @local::microboone_message_services_prod_debug
   FileCatalogMetadata:     @local::art_file_catalog_mc
-  LLMetaMaker: {Enable: true}
-  @table::microboone_simulation_services
 }
-
-services.FileCatalogMetadata.applicationVersion: "develop"
-services.FileCatalogMetadata.fileType: "mc"
-services.FileCatalogMetadata.runType: "physics"
-services.FileCatalogMetadataMicroBooNE: {
-  FCLName: "run_larlite_maker_mc.fcl"
-  FCLVersion: "develop"
-  ProjectName: "LiteMC"
-  ProjectStage: "LiteMaker"
-  ProjectVersion: "develop"
-}
-
-services.DetectorPropertiesService.NumberTimeSamples: 6400
-services.DetectorPropertiesService.ReadOutWindowSize: 6400
-services.DetectorClocksService.InheritClockConfig:       false
-services.DetectorClocksService.TriggerOffsetTPC:         -0.400e3
 
 #source is now a root file
 source:
@@ -65,39 +43,37 @@ physics:
   ### random number saver
   rns:                 { module_type: RandomNumberSaver }
 
-  ### gamma catcher
-  ccvertex: { module_type: CCVertex
-              AssnProducer: "NuMuCCSelectionII"
-            }
-  proximity : @local::ProximityClustering
-  cosmicfilter : @local::CosmicFilter
+
  }
  analyzers:
  { 
-  llana     : @local::litedatamin_reco2d
+
 }
+ filters:
+ {
+  pi0eventfilter: { module_type: Pi0EventFilter
+                    TTreeName: "pi0s"
+                    TFileName: "pi0_events.root"
+                   }
+
+ }
 
  #reco: [ rns, ophit, opflash, simpleFlash, opflashfilter ]
- reco: [ rns, ccvertex, cosmicfilter, proximity ]
- ana: [ llana ]
+ reco: [ rns, pi0eventfilter ]
+ ana: []
 
  #define the output stream, there could be more than one if using filters 
  stream1:  [ out1 ]
 
  #trigger_paths is a keyword and contains the paths that modify the art::event, 
  #ie filters and producers
- #trigger_paths: [reco] 
+ trigger_paths: [ reco ] 
 
  #end_paths is a keyword and contains the paths that do not modify the art::Event, 
  #ie analyzers and output streams.  these all run simultaneously
- end_paths:     [stream1,ana]
+ end_paths:     [stream1]
  #end_paths:     [ana]
 }
-
-physics.producers.cosmicfilter.VtxProducer: "ccvertex"
-physics.producers.proximity.VtxProducer: "ccvertex"
-#physics.producers.proximity.HitProducer: "ssnethitmaker:shrhit90"
-physics.producers.proximity.HitProducer: "cosmicfilter"
 
 #block to define where the output goes.  if you defined a filter in the physics
 #block and put it in the trigger_paths then you need to put a SelectEvents: {SelectEvents: [XXX]}
@@ -107,11 +83,17 @@ outputs:
  out1:
  {
    module_type: RootOutput
-   fileName:    "proximity.root"
+   fileName:    "pi0eventfilter.root"
    dataTier:    "reco"
    compressionLevel: 1
+   SelectEvents: [reco]
    }
 }
+
+services.DetectorProperties.NumberTimeSamples:                             6400
+services.DetectorProperties.ReadOutWindowSize:                             6400
+services.DetectorClocksService.InheritClockConfig:                         false
+services.DetectorClocksService.TriggerOffsetTPC:                          -0.400e3
 
 ### Here we include the file giving us run/data dependent overrides
 
@@ -137,21 +119,6 @@ services.message.destinations :
        }
      }
   }
-}
-
-physics.analyzers.llana.out_filename:  "larlite.root"
-
-physics.analyzers.llana.stream:      "llana"
-
-physics.analyzers.llana.DataLookUpMap: {
-hit: ["gaushit","ssnethitmaker:shrhit90","cosmicfilter","ssnethitmaker:shrhitvariable"]
-cluster: ["proximity","pandoraCosmic"]
-#rawdigit: ["wcNoiseFilter"]
-track: ["pandoraNu","pandoraCosmic"]
-vertex: ["ccvertex"]
-}
-physics.analyzers.llana.AssociationLookUpMap: {
-cluster: ["proximity","pandoraCosmic"]
 }
 
 

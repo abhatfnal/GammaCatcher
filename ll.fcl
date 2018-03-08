@@ -1,8 +1,5 @@
 #include "services_microboone.fcl"
 #include "triggeralgo_service.fcl"
-#include "proximityclustering.fcl"
-#include "neutrinogammas.fcl"
-#include "cosmicfilter.fcl"
 #include "litedatamin_reco2d.fcl"
 
 process_name: ProximityClusterer
@@ -11,7 +8,7 @@ services:
 {
   scheduler:               { defaultExceptions: false }    # Make all uncaught exceptions fatal.
   # Load the service that manages root files for histograms.
-  TFileService:            { fileName: "proximity_ana.root" }
+  TFileService:            { fileName: "ll_ana.root" }
   TimeTracker:             {}
   ExptGeoHelperInterface:         @local::microboone_geometry_helper
   Geometry:                       @local::microboone_geo
@@ -66,19 +63,15 @@ physics:
   rns:                 { module_type: RandomNumberSaver }
 
   ### gamma catcher
-  ccvertex: { module_type: CCVertex
-              AssnProducer: "NuMuCCSelectionII"
-            }
-  proximity : @local::ProximityClustering
-  cosmicfilter : @local::CosmicFilter
  }
  analyzers:
  { 
   llana     : @local::litedatamin_reco2d
 }
 
- #reco: [ rns, ophit, opflash, simpleFlash, opflashfilter ]
- reco: [ rns, ccvertex, cosmicfilter, proximity ]
+
+
+ reco: [ rns]
  ana: [ llana ]
 
  #define the output stream, there could be more than one if using filters 
@@ -90,14 +83,10 @@ physics:
 
  #end_paths is a keyword and contains the paths that do not modify the art::Event, 
  #ie analyzers and output streams.  these all run simultaneously
- end_paths:     [stream1,ana]
- #end_paths:     [ana]
+ #end_paths:     [stream1,ana]
+ end_paths:     [ana]
 }
 
-physics.producers.cosmicfilter.VtxProducer: "ccvertex"
-physics.producers.proximity.VtxProducer: "ccvertex"
-#physics.producers.proximity.HitProducer: "ssnethitmaker:shrhit90"
-physics.producers.proximity.HitProducer: "cosmicfilter"
 
 #block to define where the output goes.  if you defined a filter in the physics
 #block and put it in the trigger_paths then you need to put a SelectEvents: {SelectEvents: [XXX]}
@@ -107,7 +96,7 @@ outputs:
  out1:
  {
    module_type: RootOutput
-   fileName:    "proximity.root"
+   fileName:    "ll.root"
    dataTier:    "reco"
    compressionLevel: 1
    }
@@ -115,43 +104,19 @@ outputs:
 
 ### Here we include the file giving us run/data dependent overrides
 
-### Here we try to suppress known and pointless messages
-services.message.destinations :
-{
-  STDCOUT: 
-  {
-     type:      "cout"      #tells the message service to output this destination to cout
-     threshold: "WARNING"   #tells the message service that this destination applies to WARNING and higher level messages
-     append:     true       #says to append all messages to the output
-     categories:
-     {
-       ChannelFilter:
-       {
-         limit: 0
-         reportEvery: 0
-       }
-       default:
-       {
-         limit: -1  #don't print anything at the infomsg level except the explicitly named categories
-         reportEvery: 1
-       }
-     }
-  }
-}
 
 physics.analyzers.llana.out_filename:  "larlite.root"
 
 physics.analyzers.llana.stream:      "llana"
 
 physics.analyzers.llana.DataLookUpMap: {
-hit: ["gaushit","ssnethitmaker:shrhit90","cosmicfilter","ssnethitmaker:shrhitvariable"]
-cluster: ["proximity","pandoraCosmic"]
-#rawdigit: ["wcNoiseFilter"]
+hit: ["gaushit","ssnethitmaker:shrhit90"]
+cluster: ["proximity","cmerger"]
 track: ["pandoraNu","pandoraCosmic"]
 vertex: ["ccvertex"]
 }
 physics.analyzers.llana.AssociationLookUpMap: {
-cluster: ["proximity","pandoraCosmic"]
+cluster: ["proximity","cmerger"]
 }
 
 

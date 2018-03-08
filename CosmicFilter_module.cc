@@ -235,8 +235,10 @@ void CosmicFilter::produce(art::Event & e)
     auto trkdist = SphereIntersection(trk);
     
     std::cout << "Track has " << trkdist.first << " intersections w/ vertex ROI. IP min is : " << trkdist.second << std::endl;
+    std::cout << "Trk L : " << trk.Length() << "\t S-E mag : " << (trk.Vertex()-trk.End()).Mag() << std::endl;
     std::cout << "Track start [x,z] -> " << trk.Vertex().X() << ", " << trk.Vertex().Z() << std::endl;
     std::cout << "Track end   [x,z] -> " << trk.End().X()    << ", " << trk.End().Z()    << std::endl;
+    std::cout << std::endl;
 
     // if no intersections -> check IP
     if ( (trkdist.first == 0) && (trkdist.second < fIPmin) ) continue;
@@ -264,7 +266,7 @@ void CosmicFilter::produce(art::Event & e)
 
 
     // remove delta-rays if within 50 cm
-    if ( (trkdist.first <= 1) && (trkdist.second < 5*fIPmin) ) continue;
+    if ( (trkdist.first <= 1) && (trkdist.second < fIPmin) ) continue;
 
     // for all deltay-rays associated to track, if they exist
     if ( _pfpmap.find(t) != _pfpmap.end() ) {
