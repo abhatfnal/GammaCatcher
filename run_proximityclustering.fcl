@@ -63,6 +63,12 @@ physics:
   rns:                 { module_type: RandomNumberSaver }
 
   ### gamma catcher
+  cosmicfilter: {
+                 module_type: "CosmicFilter"
+                 HitProducer: "gaushit"
+                 TrkProducer: "pandoraCosmic"
+                 MinTrkLength: 10.
+                }
   proximityclustering : @local::ProximityClustering
  }
  analyzers:
@@ -70,7 +76,7 @@ physics:
 }
 
  #reco: [ rns, ophit, opflash, simpleFlash, opflashfilter ]
- reco: [ rns, proximityclustering ]#, neutrinogammas ]
+ reco: [ rns, cosmicfilter, proximityclustering ]#, neutrinogammas ]
  ana:  []#photonana, llana ]
 
  #define the output stream, there could be more than one if using filters 
@@ -86,7 +92,7 @@ physics:
  #end_paths:     [ana]
 }
 
-physics.producers.proximityclustering.HitProducer: "gaushit"
+physics.producers.proximityclustering.HitProducer: "cosmicfilter"
 physics.producers.proximityclustering.VtxProducer: "pandoraCosmic"
 physics.producers.proximityclustering.ROI: 1000
 
