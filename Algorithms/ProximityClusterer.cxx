@@ -150,6 +150,157 @@ namespace gammacatcher {
     return true;
   }
 
+  double ProximityClusterer::nearbyCharge(const art::ValidHandle<std::vector<recob::Hit> >& hit_h,
+					  const std::vector<art::Ptr<recob::Hit> > hit_v,
+					  const int& plane, const double& radius) {
+
+    // integrated nearby charge
+    double qneighbor = 0;
+
+    // calculate COM of the cluster
+    double wirecm = 0;
+    double timecm = 0;
+    for (size_t hh=0; hh < hit_v.size(); hh++) {
+      auto hit = hit_v.at(hh);
+      wirecm += hit->WireID().Wire * _wire2cm;
+      timecm += hit->PeakTime() * _time2cm;
+    }
+    wirecm /= hit_v.size();
+    timecm /= hit_v.size();
+
+    int i = wirecm / _cellSize;
+    int j = timecm / _cellSize;
+
+    auto cellcoord = std::make_pair(i,j);
+    
+    // how many cells to go out? depends on radius
+    size_t cellSpan = radius / _cellSize;
+
+    std::vector<size_t> neighborhitidx_v;
+    getNeighboringHits(cellcoord,cellSpan,neighborhitidx_v);
+
+    // loop through hits, if not belonging to cluster, add them.
+    for (auto const& hitidx : neighborhitidx_v) {
+
+      // if hit index in cluster already -> skip
+      bool belongs_to_cluster = false;
+      for (size_t hh=0; hh < hit_v.size(); hh++) {
+	if (hit_v.at(hh).key() == hitidx) {
+	  belongs_to_cluster = true;
+	  break;
+	}
+      }// for all cluster hits
+      if (belongs_to_cluster == true) continue;
+
+      auto const& hit = hit_h->at(hitidx);
+
+      // get cm distance to (wirecm,timecm)
+      double hitTcm = hit.PeakTime()    * _time2cm;
+      double hitWcm = hit.WireID().Wire * _wire2cm;
+
+      double d2D = sqrt ( (hitTcm - timecm) * (hitTcm - timecm) + (hitWcm - wirecm) * (hitWcm - wirecm) );
+      
+      if (d2D < radius)
+	qneighbor += hit.Integral();
+      
+    }// for all hit indices from the cells
+    
+    return qneighbor;
+  }
+
+  double ProximityClusterer::closestHit(const art::ValidHandle<std::vector<recob::Hit> >& hit_h,
+					const std::vector<art::Ptr<recob::Hit> > hit_v,
+					const int& plane) {
+
+    // calculate COM of the cluster
+    double wirecm = 0;
+    double timecm = 0;
+    for (size_t hh=0; hh < hit_v.size(); hh++) {
+      auto hit = hit_v.at(hh);
+      wirecm += hit->WireID().Wire * _wire2cm;
+      timecm += hit->PeakTime() * _time2cm;
+    }
+    wirecm /= hit_v.size();
+    timecm /= hit_v.size();
+
+    int i = wirecm / _cellSize;
+    int j = timecm / _cellSize;
+
+    auto cellcoord = std::make_pair(i,j);
+    
+    // max number of neighbor cells to explore
+    size_t cellSpanMax = 10;
+    size_t cellSpan    = 0;
+
+    // set minimum radius to be max cellspan explored
+    // if we find it to be smaller this value will be updated
+    double rmin = cellSpanMax * _cellSize;
+
+    while (cellSpan < cellSpanMax) {
+
+      std::vector<size_t> neighborhitidx_v;
+      getNeighboringHits(cellcoord,cellSpan,neighborhitidx_v);
+
+      // loop through hits, if not belonging to cluster, add them.
+      for (auto const& hitidx : neighborhitidx_v) {
+
+	// if hit index in cluster already -> skip
+	bool belongs_to_cluster = false;
+	for (size_t hh=0; hh < hit_v.size(); hh++) {
+	  if (hit_v.at(hh).key() == hitidx) {
+	    belongs_to_cluster = true;
+	    break;
+	  }
+	}// for all cluster hits
+	if (belongs_to_cluster == true) continue;
+	
+	auto const& hit = hit_h->at(hitidx);
+	
+	// get cm distance to (wirecm,timecm)
+	double hitTcm = hit.PeakTime()    * _time2cm;
+	double hitWcm = hit.WireID().Wire * _wire2cm;
+	
+	double d2D = sqrt ( (hitTcm - timecm) * (hitTcm - timecm) + (hitWcm - wirecm) * (hitWcm - wirecm) );
+	
+	if (d2D < rmin) { rmin = d2D; }
+
+      }// for all hit indices from the cells
+
+      // if we found even a single hit in this cellSpan search
+      // then we can stop searching further.
+      if (neighborhitidx_v.size()) break;
+
+    }// while looping through larger and larger cell-spans
+
+    return rmin;
+  }
+    
+
+  // get all hits from neighboring cells
+  void ProximityClusterer::getNeighboringHits(const std::pair<int,int>& pair, const size_t& cellSpan, 
+					      std::vector<size_t>& hitIndices){
+   
+    auto const& i       = pair.first;
+    // time-space cell index
+    auto const& j       = pair.second;
+
+    hitIndices.clear();
+    
+    for (size_t icell = i-cellSpan; icell < (i+cellSpan+1); icell++) {
+      for (size_t jcell = j-cellSpan; jcell < (j+cellSpan+1); jcell++) {
+
+	if (_hitMap.find(std::make_pair(i,j)) != _hitMap.end()){
+	  for (auto &h : _hitMap[std::make_pair(i,j)])
+	hitIndices.push_back(h);
+	}
+
+      }// for all j cells
+    }// for all i cells
+
+    return;
+  }
+
+
   // get all hits from neighboring cells
   void ProximityClusterer::getNeighboringHits(const std::pair<int,int>& pair, std::vector<size_t>& hitIndices){
    

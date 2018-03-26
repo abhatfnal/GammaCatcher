@@ -19,6 +19,8 @@
 
 #include "lardataobj/RecoBase/Hit.h"
 #include "lardataobj/RecoBase/Vertex.h"
+#include "lardata/Utilities/AssociationUtil.h"
+
 #include "messagefacility/MessageLogger/MessageLogger.h"
 #include "larcore/Geometry/Geometry.h"
 #include "larcore/Geometry/GeometryCore.h"
@@ -58,6 +60,36 @@ namespace gammacatcher {
     bool cluster(const art::ValidHandle<std::vector<recob::Hit> >& hit_h,
 		 std::vector<std::vector<unsigned int> >& _out_cluster_vector);
 
+    /**
+       @brief Get total charge within a certain radius of a point
+       Given the event hit record and the hits and COM for a specific cluster
+       this function calculates the total charge depsoited within a 2D radius of the
+       cluster on a specific plane, excluding any charge from hits already included in the cluster
+       @input hit_h -> hit vector from the event record
+       @input hit_v -> vector of hits associated to the cluster we are interested in
+       @input plane  -> plane for which the COM info is given and for which to calculate the nearby hits
+       @return total charge in the integration radius (in hit.Integral() units)
+     */
+    double nearbyCharge(const art::ValidHandle<std::vector<recob::Hit> >& hit_h,
+			const std::vector<art::Ptr<recob::Hit> > hit_v,
+			const int& plane, const double& radius);
+			
+    /**
+       @brief Get nearest hit to a cluster, for hits in the plane not associated to the cluster itself.
+       Given the event hit record and the hits and COM for a specific cluster
+       this function calculates the distance to the nearest hit external to the cluster.
+       @input hit_h -> hit vector from the event record
+       @input hit_v -> vector of hits associated to the cluster we are interested in
+       @input plane  -> plane for which the COM info is given and for which to calculate the nearby hits
+       @return distance to nearest hit
+     */
+    double closestHit(const art::ValidHandle<std::vector<recob::Hit> >& hit_h,
+		      const std::vector<art::Ptr<recob::Hit> > hit_v,
+		      const int& plane);
+
+			
+    
+
     /// Set the size of each cell for hit-map
     void setCellSize(double d) { _cellSize = d; }
     /// Set the radius around which to search for hits
@@ -94,6 +126,12 @@ namespace gammacatcher {
 
     /// Functions to decide if two hits should belong to the same cluster or not
     bool HitsCompatible(const recob::Hit& h1, const recob::Hit& h2);
+
+    /// Function to get neighboring hits with a variable cellspan (from self + neighoring cells)
+    // if cellSpan = 0, get only from current cell
+    // if == 1 -> get from 3x3 cell matrix, etc...
+    void getNeighboringHits(const std::pair<int,int>& pair, const size_t& cellSpan,
+			    std::vector<size_t>& hitIndices);
 
     /// Function to get neighboring hits (from self + neighoring cells)
     void getNeighboringHits(const std::pair<int,int>& pair, std::vector<size_t>& hitIndices);
