@@ -131,16 +131,16 @@ namespace gammacatcher {
     // if cellSpan = 0, get only from current cell
     // if == 1 -> get from 3x3 cell matrix, etc...
     void getNeighboringHits(const std::pair<int,int>& pair, const size_t& cellSpan,
-			    std::vector<size_t>& hitIndices);
+			    std::vector<size_t>& hitIndices, const int& pl);
 
     /// Function to get neighboring hits (from self + neighoring cells)
-    void getNeighboringHits(const std::pair<int,int>& pair, std::vector<size_t>& hitIndices);
+    void getNeighboringHits(const std::pair<int,int>& pair, std::vector<size_t>& hitIndices, const int& pl);
 
     /// check if time overlaps
     bool TimeOverlap(const recob::Hit& h1, const recob::Hit& h2, double& dmin) const;
     
     /// map connecting coordinate index (i,j) to [h1,h2,h3] (hit index list)
-    std::map<std::pair<int,int>, std::vector<size_t> > _hitMap;
+    std::vector< std::map<std::pair<int,int>, std::vector<size_t> > > _hitMap_v;
 
     /// maximum i'th and j'th
     int _maxI;

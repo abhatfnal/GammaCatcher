@@ -13,6 +13,10 @@ namespace gammacatcher {
     _wire2cm = geom->WirePitch(0,1,0);
     _time2cm = detp->SamplingRate() / 1000.0 * detp->DriftVelocity( detp->Efield(), detp->Temperature() );
     
+
+    _hitMap_v.clear();
+    _hitMap_v.resize(3);
+
     return true;
   }
   
@@ -43,7 +47,7 @@ namespace gammacatcher {
       std::map<std::pair<int,int>, std::vector<size_t> >::iterator it;
       
       // loop through hits in each cell to find matches
-      for (it = _hitMap.begin(); it != _hitMap.end(); it++){
+      for (it = _hitMap_v[pl].begin(); it != _hitMap_v[pl].end(); it++){
 
 	// pair = (i,j) indices of this cell in the _hitMap
 	auto const& pair = it->first;
@@ -57,7 +61,7 @@ namespace gammacatcher {
 	std::vector<size_t> cellhits = it->second;
 
 	std::vector<size_t> neighborhits;
-	getNeighboringHits(pair,neighborhits);
+	getNeighboringHits(pair,neighborhits,pl);
 
 	for (size_t h1=0; h1 < cellhits.size(); h1++){
 
@@ -177,7 +181,7 @@ namespace gammacatcher {
     size_t cellSpan = radius / _cellSize;
 
     std::vector<size_t> neighborhitidx_v;
-    getNeighboringHits(cellcoord,cellSpan,neighborhitidx_v);
+    getNeighboringHits(cellcoord,cellSpan,neighborhitidx_v,plane);
 
     // loop through hits, if not belonging to cluster, add them.
     for (auto const& hitidx : neighborhitidx_v) {
@@ -239,7 +243,7 @@ namespace gammacatcher {
     while (cellSpan < cellSpanMax) {
 
       std::vector<size_t> neighborhitidx_v;
-      getNeighboringHits(cellcoord,cellSpan,neighborhitidx_v);
+      getNeighboringHits(cellcoord,cellSpan,neighborhitidx_v,plane);
 
       // loop through hits, if not belonging to cluster, add them.
       for (auto const& hitidx : neighborhitidx_v) {
@@ -278,7 +282,7 @@ namespace gammacatcher {
 
   // get all hits from neighboring cells
   void ProximityClusterer::getNeighboringHits(const std::pair<int,int>& pair, const size_t& cellSpan, 
-					      std::vector<size_t>& hitIndices){
+					      std::vector<size_t>& hitIndices, const int& pl){
    
     auto const& i       = pair.first;
     // time-space cell index
@@ -289,8 +293,8 @@ namespace gammacatcher {
     for (size_t icell = i-cellSpan; icell < (i+cellSpan+1); icell++) {
       for (size_t jcell = j-cellSpan; jcell < (j+cellSpan+1); jcell++) {
 
-	if (_hitMap.find(std::make_pair(i,j)) != _hitMap.end()){
-	  for (auto &h : _hitMap[std::make_pair(i,j)])
+	if (_hitMap_v[pl].find(std::make_pair(i,j)) != _hitMap_v[pl].end()){
+	  for (auto &h : _hitMap_v[pl][std::make_pair(i,j)])
 	hitIndices.push_back(h);
 	}
 
@@ -302,7 +306,7 @@ namespace gammacatcher {
 
 
   // get all hits from neighboring cells
-  void ProximityClusterer::getNeighboringHits(const std::pair<int,int>& pair, std::vector<size_t>& hitIndices){
+  void ProximityClusterer::getNeighboringHits(const std::pair<int,int>& pair, std::vector<size_t>& hitIndices, const int& pl){
    
     auto const& i       = pair.first;
     // time-space cell index
@@ -312,8 +316,8 @@ namespace gammacatcher {
     // |__|__|__|
     // |__|XX|__|
     // |__|__|__|
-    if (_hitMap.find(std::make_pair(i,j)) != _hitMap.end()){
-      for (auto &h : _hitMap[std::make_pair(i,j)])
+    if (_hitMap_v[pl].find(std::make_pair(i,j)) != _hitMap_v[pl].end()){
+      for (auto &h : _hitMap_v[pl][std::make_pair(i,j)])
 	hitIndices.push_back(h);
     }
 
@@ -322,64 +326,64 @@ namespace gammacatcher {
     // |__|__|__|
     // |XX|__|__|
     // |__|__|__|
-    if (_hitMap.find(std::make_pair(i-1,j)) != _hitMap.end()){
-      for (auto &h : _hitMap[std::make_pair(i-1,j)])
+    if (_hitMap_v[pl].find(std::make_pair(i-1,j)) != _hitMap_v[pl].end()){
+      for (auto &h : _hitMap_v[pl][std::make_pair(i-1,j)])
 	hitIndices.push_back(h);
     }
     // _________
     // |__|__|__|
     // |__|__|__|
     // |__|XX|__|
-    if (_hitMap.find(std::make_pair(i,j-1)) != _hitMap.end()){
-      for (auto &h : _hitMap[std::make_pair(i,j-1)])
+    if (_hitMap_v[pl].find(std::make_pair(i,j-1)) != _hitMap_v[pl].end()){
+      for (auto &h : _hitMap_v[pl][std::make_pair(i,j-1)])
 	hitIndices.push_back(h);
     }
     // _________
     // |__|__|__|
     // |__|__|__|
     // |XX|__|__|
-    if ( _hitMap.find(std::make_pair(i-1,j-1)) != _hitMap.end() ){
-      for (auto &h : _hitMap[std::make_pair(i-1,j-1)])
+    if ( _hitMap_v[pl].find(std::make_pair(i-1,j-1)) != _hitMap_v[pl].end() ){
+      for (auto &h : _hitMap_v[pl][std::make_pair(i-1,j-1)])
 	hitIndices.push_back(h);
     }
     // _________
     // |__|XX|__|
     // |__|__|__|
     // |__|__|__|
-    if ( _hitMap.find(std::make_pair(i,j+1)) != _hitMap.end() ){
-      for (auto &h : _hitMap[std::make_pair(i,j+1)])
+    if ( _hitMap_v[pl].find(std::make_pair(i,j+1)) != _hitMap_v[pl].end() ){
+      for (auto &h : _hitMap_v[pl][std::make_pair(i,j+1)])
 	hitIndices.push_back(h);
     }
     // _________
     // |__|__|__|
     // |__|__|XX|
     // |__|__|__|
-    if ( _hitMap.find(std::make_pair(i+1,j)) != _hitMap.end() ){
-      for (auto &h : _hitMap[std::make_pair(i+1,j)])
+    if ( _hitMap_v[pl].find(std::make_pair(i+1,j)) != _hitMap_v[pl].end() ){
+      for (auto &h : _hitMap_v[pl][std::make_pair(i+1,j)])
 	hitIndices.push_back(h);
     }
     // _________
     // |__|__|XX|
     // |__|__|__|
     // |__|__|__|
-    if ( _hitMap.find(std::make_pair(i+1,j+1)) != _hitMap.end() ){
-      for (auto &h : _hitMap[std::make_pair(i+1,j+1)])
+    if ( _hitMap_v[pl].find(std::make_pair(i+1,j+1)) != _hitMap_v[pl].end() ){
+      for (auto &h : _hitMap_v[pl][std::make_pair(i+1,j+1)])
 	hitIndices.push_back(h);
     }
     // _________
     // |XX|__|__|
     // |__|__|__|
     // |__|__|__|
-    if ( _hitMap.find(std::make_pair(i-1,j+1)) != _hitMap.end() ){
-      for (auto &h : _hitMap[std::make_pair(i-1,j+1)])
+    if ( _hitMap_v[pl].find(std::make_pair(i-1,j+1)) != _hitMap_v[pl].end() ){
+      for (auto &h : _hitMap_v[pl][std::make_pair(i-1,j+1)])
 	hitIndices.push_back(h);
     }
     // _________
     // |__|__|__|
     // |__|__|__|
     // |__|__|XX|
-    if ( _hitMap.find(std::make_pair(i+1,j-1)) != _hitMap.end() ){
-      for (auto &h : _hitMap[std::make_pair(i+1,j-1)])
+    if ( _hitMap_v[pl].find(std::make_pair(i+1,j-1)) != _hitMap_v[pl].end() ){
+      for (auto &h : _hitMap_v[pl][std::make_pair(i+1,j-1)])
 	hitIndices.push_back(h);
     }
   }
@@ -440,7 +444,7 @@ namespace gammacatcher {
   
   void ProximityClusterer::MakeHitMap(const art::ValidHandle<std::vector<recob::Hit> >& hitlist, int plane){
     
-    _hitMap.clear();
+    _hitMap_v[plane].clear();
     // temporary pair
     std::pair<int,int> tmpPair;
 
@@ -474,12 +478,12 @@ namespace gammacatcher {
       // does this entry exist in the map?
       // if yes -> append to vector
       // if no create new vector and add to map
-      if (_hitMap.find(tmpPair) == _hitMap.end()){
+      if (_hitMap_v[plane].find(tmpPair) == _hitMap_v[plane].end()){
 	std::vector<size_t> aaa = {h};
-	_hitMap[tmpPair] = aaa;
+	_hitMap_v[plane][tmpPair] = aaa;
       }
       else
-	_hitMap[tmpPair].push_back(h);
+	_hitMap_v[plane][tmpPair].push_back(h);
     }// for all hits
 
     return;
